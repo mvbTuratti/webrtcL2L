@@ -18,6 +18,7 @@ defmodule WebrtcL2LWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :index
+    live "/room", Room
   end
 
   # Other scopes may use custom stacks.
