@@ -13,9 +13,11 @@ defmodule WebrtcL2L.Application do
       # Start the PubSub system
       {Phoenix.PubSub, name: WebrtcL2L.PubSub},
       # Start the Endpoint (http/https)
-      WebrtcL2LWeb.Endpoint
+      WebrtcL2LWeb.Endpoint,
       # Start a worker by calling: WebrtcL2L.Worker.start_link(arg)
       # {WebrtcL2L.Worker, arg}
+      {Registry, keys: :unique, name: WebrtcL2L.RouterRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: WebrtcL2L.RouterSupervisor}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
