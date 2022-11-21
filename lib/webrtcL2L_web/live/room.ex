@@ -3,15 +3,38 @@ defmodule WebrtcL2LWeb.Room do
   alias WebrtcL2L.Router
 
   def mount(%{"room" => room}, _session, socket) do
-    IO.inspect(Registry.lookup(WebrtcL2L.RouterRegistry, room))
-    pid = get_router_pid(room)
-    socket = assign(socket, pid_router: pid)
-    {:ok, assign_rtc(socket, room)}
+    socket = assign(socket, teste: 3)
+    socket = if connected?(socket), do: set_user_and_room(socket, room), else: socket
+    {:ok, socket}
+  end
+
+  def handle_event("teste", _params, socket) do
+    IO.inspect(socket)
+    socket = set_room(socket)
+    {:noreply, socket}
   end
 
   defp via_tuple(name) do
     {:via, Registry, {WebrtcL2L.RouterRegistry, name}}
   end
+
+
+  defp set_user_and_room(socket, room) do
+    user_id =
+      ?a..?z
+      |> Enum.take_random(8)
+      |> List.to_string()
+    assign(socket, room: room, user_id: user_id)
+  end
+
+  defp set_room(socket) do
+    room = socket.assigns.room
+    pid = get_router_pid(room)
+    socket = assign(socket, pid_router: pid)
+    assign_rtc(socket, room)
+  end
+
+
 
   defp assign_rtc(socket, name) do
     socket
