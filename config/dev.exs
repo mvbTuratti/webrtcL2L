@@ -19,8 +19,13 @@ config :webrtcL2L, WebrtcL2LWeb.Endpoint,
     esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:default, ~w(--watch)]},
     sass: {DartSass, :install_and_run, [:default, ~w(--watch)]}
+  ],
+  https: [
+    port: 4001,
+    cipher_suite: :strong,
+    keyfile: "priv/cert/selfsigned_key.pem",
+    certfile: "priv/cert/selfsigned.pem"
   ]
-
 # ## SSL Support
 #
 # In order to use HTTPS in development, a self-signed

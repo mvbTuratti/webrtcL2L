@@ -1,10 +1,13 @@
+// Code for first step, configuring video and audio.
 const audioSelect = document.getElementById("audio-btn");
 const videoSelect = document.getElementById("video-btn");
 const audioDropdown = document.getElementById("dropdown-audio");
 const videoDropdown = document.getElementById("dropdown-video");
 const spinner = document.getElementById("spinner");
 const videoTag = document.getElementById("video");
-
+const videoDiv = document.getElementById("video-div");
+let audioId = "";
+let videoId = "";
 audioSelect.onclick = () => {
     if (videoDropdown.className.includes('block')){
         videoDropdown.className = videoDropdown.className.replace('block', 'hidden');
@@ -37,6 +40,7 @@ function prepareDevices(devices) {
     while (audio.firstChild){
         audio.removeChild(audio.firstChild);
     }
+    console.log(devices)
     for (let i = 0; i !== devices.length; ++i) {
         const device = devices[i];
         if (device.kind === 'audioinput') {
@@ -48,44 +52,88 @@ function prepareDevices(devices) {
           const li = liItemCreator(label, device.deviceId, 1);
           video.appendChild(li);
         } else {
-          console.log('Some other kind of source/device: ', deviceInfo);
+          console.log('Some other kind of source/device: ', device);
         }
     }
-
-    return false;
 }
 
 function liItemCreator(content, id, type) {
     let li = document.createElement("li");
+    li.className += " mt-4 mb-4 h-8 hover:bg-gray-400"
     let anchor = document.createElement("a");
-    anchor.className += "bg-gray-100 text-sm hover:bg-gray-100 text-gray-700 block px-4 py-2";
+    console.log(type)
+    console.log(videoId)
+    console.log(audioId)
+    if ((type === 1 && videoId == "")){
+        anchor.className += " bg-gray-100"
+        videoId = id;
+    }else if (type === 0 && audioId == ""){
+        anchor.className += " bg-gray-100"
+        audioId = id;
+    }
+
+    anchor.className += " text-sm text-gray-700 block px-4 py-2";
     anchor.text = content;
-    li.id = id; //returning empty...
+    li.id = id;
     anchor.onclick = () => {
         if (type === 1){
             videoDropdown.className = videoDropdown.className.replace('block', 'hidden');
             document.querySelectorAll("ul#dropdown-video-ul li a").forEach(a => {
                 a.className = a.className.replace(/\bbg-gray-100\b/, "")
             });
+            videoId = id;
         } else {
             audioDropdown.className = audioDropdown.className.replace('block', 'hidden');
             document.querySelectorAll("ul#dropdown-audio-ul li a").forEach(a => {
                 a.className = a.className.replace(/\b(bg-gray-100)\b/, "")
             });
+            audioId = id;
         }
-        anchor.className += " bg-gray-100"; 
-        
+        anchor.className += " bg-gray-100";
+        start();
     };
     li.appendChild(anchor);
 
     return li;
 }
 
+function streamStart(stream) {
+    window.stream = stream; 
+    videoTag.srcObject = stream;
 
+    return navigator.mediaDevices.enumerateDevices();
+}
+  
+
+function start() {
+    if (window.stream) {
+        window.stream.getTracks().forEach(track => {
+        track.stop();
+        });
+    }
+    const audioSource = audioId;
+    const videoSource = videoId;
+    const constraints = {
+        audio: {deviceId: audioSource ? {exact: audioSource} : undefined},
+        video: {deviceId: videoSource ? {exact: videoSource} : undefined}
+    };
+    console.log(constraints)
+    navigator.mediaDevices.getUserMedia(constraints).then(streamStart).then(e => {
+        spinner.hidden = true;
+        videoDiv.hidden = false;
+    }).catch(() => alert("error"));
+}
 
 
 setTimeout(() => {
-    navigator.mediaDevices.enumerateDevices().then(prepareDevices).catch(() => alert("Erro ao reconhecer dispositivos de vídeo e áudio"));
+    (async () => {   
+        await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+        let devices = await navigator.mediaDevices.enumerateDevices(); 
+        prepareDevices(devices);
+        start();
+      })();
 
 }, 100);
+
+// Code for webrtc
 
