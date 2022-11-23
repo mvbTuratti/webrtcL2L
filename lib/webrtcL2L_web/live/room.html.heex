@@ -9,10 +9,10 @@
       From: "opacity-100"
       To: "opacity-0"
   -->
-  <div class="fixed inset-0 hidden bg-gray-500 bg-opacity-75 transition-opacity md:block"></div>
+  <div class="fixed inset-0 hidden bg-gray-500 bg-opacity-75 transition-opacity md:block"> </div>
 
   <div class="fixed inset-0 z-10 overflow-y-auto">
-    <div class="flex min-h-full items-stretch justify-center text-center md:items-center md:px-2 lg:px-4">
+    <div class={"#{if @conference, do: "hidden", else: "flex"} min-h-full items-stretch justify-center text-center md:items-center md:px-2 lg:px-4"}>
       <!--
         Modal panel, show/hide based on modal state.
 
@@ -27,20 +27,25 @@
         <div class="relative flex w-full items-center overflow-hidden bg-white px-4 pt-14 pb-8 shadow-2xl sm:px-6 sm:pt-8 md:p-6 lg:p-8">
           <div class="grid w-full grid-cols-1 items-start gap-y-8 gap-x-6 sm:grid-cols-12 lg:gap-x-8">
             <div class="aspect-w-2 aspect-h-2 overflow-hidden rounded-lg bg-gray-100 sm:col-span-8 lg:col-span-7">
-                <div id="spinner" class="flex items-center justify-center">
-                    <div style="border-top-color:transparent" class="w-8 h-8 border-4 border-blue-200 rounded-full animate-spin"></div>
+                <div  class="flex items-center justify-center">
+                    <div id="spinner" style="border-top-color:transparent" class="w-8 h-8 border-4 border-blue-200 rounded-full animate-spin"></div>
                 </div>
                 <div hidden id="video-div" class="flex items-center justify-center">
                     <video id="video" src="#" autoplay playsinline ></video>
-                    <div class="flex absolute bottom-16 left-1/2 z-30 space-x-8 -translate-x-1/2">
-                        <button type="button" class="w-14 h-14 rounded-full bg-red-500/50 hover:bg-red-500 flex justify-center items-center">
-                            <img id="mic-on" hidden class="h-12 w-12" src="assets/mic-on.svg" alt="microphone">
-                            <img id="mic-off" class="h-10 w-10" src="assets/mic-off.svg" alt="microphone">
+                    <div class="flex absolute bottom-10 md:bottom-16  left-1/2 z-30 space-x-4 md:space-x-8 -translate-x-1/2">
+                        <button type="button" onclick="videoControl('audio')" class="w-10 h-10 md:w-14 md:h-14 rounded-full bg-red-500/50 hover:bg-red-500 flex justify-center items-center">
+                            <img id="mic-on" hidden class="h-8 w-8 md:h-12 md:w-12" src="assets/mic-on.svg" alt="microphone">
+                            <img id="mic-off" class="h-8 w-8 md:h-12 md:w-12" src="assets/mic-off.svg" alt="microphone">
                         </button>
-                        <button type="button" class="w-14 h-14 rounded-full bg-red-500/50 hover:bg-red-500 flex justify-center items-center">
-                            <img id="camera-off" src="assets/camera-off.svg" class="w-10 h-10" alt="camera">
-                            <img id="camera-on" hidden src="assets/camera-on.svg" class="w-10 h-10" alt="camera">
+                        <button type="button" onclick="videoControl('camera')" class="w-10 h-10 md:w-14 md:h-14 rounded-full bg-red-500/50 hover:bg-red-500 flex justify-center items-center">
+                            <img id="camera-off" src="assets/camera-off.svg" class="h-8 w-8 md:h-12 md:w-12" alt="camera">
+                            <img id="camera-on" hidden src="assets/camera-on.svg" class="h-8 w-8 md:h-12 md:w-12" alt="camera">
                         </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-center">
+                    <div style="border-top-color:transparent">
+                        <img hidden id="defaultImg" src="assets/default.svg" class="w-24 h-24" alt="default image">
                     </div>
                 </div>
             </div>
@@ -65,7 +70,7 @@
                 <div>&nbsp</div>
                 </div>
 
-                <button type="submit" class="mt-8 flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 py-3 px-8 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Entrar</button>
+                <button type="submit" phx-click="conference" class="mt-8 flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 py-3 px-8 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Entrar</button>
             </div>
           </div>
         </div>

@@ -3,13 +3,14 @@ defmodule WebrtcL2LWeb.Room do
   alias WebrtcL2L.Router
 
   def mount(%{"room" => room}, _session, socket) do
-    socket = assign(socket, teste: 3)
+    socket = assign(socket, teste: 3, conference: false)
     socket = if connected?(socket), do: set_user_and_room(socket, room), else: socket
     {:ok, socket}
   end
 
-  def handle_event("teste", _params, socket) do
+  def handle_event("conference", _params, socket) do
     IO.inspect(socket)
+    socket = assign(socket, conference: true)
     socket = set_room(socket)
     {:noreply, socket}
   end

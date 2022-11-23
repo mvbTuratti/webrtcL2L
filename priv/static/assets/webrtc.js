@@ -5,7 +5,12 @@ const audioDropdown = document.getElementById("dropdown-audio");
 const videoDropdown = document.getElementById("dropdown-video");
 const spinner = document.getElementById("spinner");
 const videoTag = document.getElementById("video");
+const defaultImg = document.getElementById("defaultImg");
 const videoDiv = document.getElementById("video-div");
+const cameraOn = document.getElementById("camera-on");
+const cameraOff = document.getElementById("camera-off");
+const audioOn = document.getElementById("mic-on");
+const audioOff = document.getElementById("mic-off");
 let audioId = "";
 let videoId = "";
 audioSelect.onclick = () => {
@@ -105,7 +110,7 @@ function streamStart(stream) {
 }
   
 
-function start() {
+function start(config) {
     if (window.stream) {
         window.stream.getTracks().forEach(track => {
         track.stop();
@@ -114,23 +119,43 @@ function start() {
     const audioSource = audioId;
     const videoSource = videoId;
     const constraints = {
-        audio: {deviceId: audioSource ? {exact: audioSource} : undefined},
-        video: {deviceId: videoSource ? {exact: videoSource} : undefined}
+        audio: config.audio && {deviceId: audioSource ? {exact: audioSource} : undefined},
+        video: config.video && {deviceId: videoSource ? {exact: videoSource} : undefined}
     };
-    console.log(constraints)
+    
     navigator.mediaDevices.getUserMedia(constraints).then(streamStart).then(e => {
         spinner.hidden = true;
-        videoDiv.hidden = false;
+        if (config.video){
+            videoDiv.hidden = false;
+            defaultImg.hidden = true;
+        } else {
+            videoDiv.hidden = true;
+            defaultImg.hidden = false;
+        }
     }).catch(() => alert("error"));
 }
 
+function videoControl(type) {
+    if (type === 'audio') {
+        audioOn.hidden = !audioOn.hidden;
+        audioOff.hidden = !audioOff.hidden;
+    } else if (type === 'camera') {
+        cameraOn.hidden = !cameraOn.hidden;
+        cameraOff.hidden = !cameraOff.hidden;
+    }
+    let constraints = {audio: audioOn.hidden, video: cameraOn.hidden}
+    const fun = (async () => {   
+        await navigator.mediaDevices.getUserMedia(constraints);
+        start(constraints);
+    })();
+}
 
 setTimeout(() => {
     (async () => {   
         await navigator.mediaDevices.getUserMedia({audio: true, video: true});
         let devices = await navigator.mediaDevices.enumerateDevices(); 
         prepareDevices(devices);
-        start();
+        start({audio: true, video: true});
       })();
 
 }, 100);
