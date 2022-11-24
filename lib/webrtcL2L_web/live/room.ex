@@ -8,10 +8,24 @@ defmodule WebrtcL2LWeb.Room do
     {:ok, socket}
   end
 
+
   def handle_event("conference", _params, socket) do
     IO.inspect(socket)
     socket = assign(socket, conference: true)
     socket = set_room(socket)
+    user_id =
+      ?a..?z
+      |> Enum.take_random(6)
+      |> List.to_string()
+    {:noreply, push_event(socket, "joining", %{participants: [], id: user_id})}
+  end
+
+  def handle_event("icecandidate", payload, socket) do
+    IO.inspect(payload)
+    {:noreply, socket}
+  end
+
+  def handle_event(_,_, socket) do
     {:noreply, socket}
   end
 

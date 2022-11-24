@@ -30,7 +30,7 @@ let Hooks = {}
 Hooks.CreateEvent = {
     mounted() {
         relay = this;
-        document.addEventListener("relay-event", (e) =>
+        document.addEventListener("room-event", (e) =>
           relay.pushEvent(e.detail.event, e.detail.payload)
         );
     },

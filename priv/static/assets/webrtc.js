@@ -45,7 +45,6 @@ function prepareDevices(devices) {
     while (audio.firstChild){
         audio.removeChild(audio.firstChild);
     }
-    console.log(devices)
     for (let i = 0; i !== devices.length; ++i) {
         const device = devices[i];
         if (device.kind === 'audioinput') {
@@ -57,7 +56,7 @@ function prepareDevices(devices) {
           const li = liItemCreator(label, device.deviceId, 1);
           video.appendChild(li);
         } else {
-          console.log('Some other kind of source/device: ', device);
+          //console.log('Some other kind of source/device: ', device);
         }
     }
 }
@@ -66,9 +65,6 @@ function liItemCreator(content, id, type) {
     let li = document.createElement("li");
     li.className += " mt-4 mb-4 h-8 hover:bg-gray-400"
     let anchor = document.createElement("a");
-    console.log(type)
-    console.log(videoId)
-    console.log(audioId)
     if ((type === 1 && videoId == "")){
         anchor.className += " bg-gray-100"
         videoId = id;
@@ -151,14 +147,40 @@ function videoControl(type) {
 }
 
 setTimeout(() => {
-    (async () => {   
-        await navigator.mediaDevices.getUserMedia({audio: true, video: true});
-        let devices = await navigator.mediaDevices.enumerateDevices(); 
-        prepareDevices(devices);
-        start({audio: true, video: true});
+    (async () => {
+        try {
+            await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+            let devices = await navigator.mediaDevices.enumerateDevices(); 
+            prepareDevices(devices);
+            start({audio: true, video: true});
+        } catch (error) {
+            spinner.hidden = true;
+            videoDiv.hidden = true;
+            defaultImg.hidden = false;
+            let buttons = document.getElementsByTagName("button");
+            for (let index = 0; index < buttons.length; index++) {
+                const element = buttons[index];
+                element.disabled = true;
+            }
+        }
       })();
 
 }, 100);
 
 // Code for webrtc
+let participants = [];
+let id = "";
+window.addEventListener(`phx:joining`, (members) => {
+    console.log(members)
+    id = members.detail.id;
+    participants = members.detail.participants;
+    //if there's no one in the room yet, create a ICE candidate.
+    if (!participants.length){
+        
+    }
+    document.dispatchEvent(room_event("icecandidate", []));
+})
 
+let room_event = (message, payload) => new CustomEvent("room-event", {
+    detail: { event: message, payload: payload},
+});
