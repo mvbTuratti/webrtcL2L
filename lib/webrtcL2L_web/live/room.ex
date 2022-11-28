@@ -1,9 +1,10 @@
 defmodule WebrtcL2LWeb.Room do
   use WebrtcL2LWeb, :live_view
   alias WebrtcL2L.Router
+  alias WebrtcL2LWeb.Components.RoomParticipants
 
   def mount(%{"room" => room}, _session, socket) do
-    socket = assign(socket, teste: 3, conference: false)
+    socket = assign(socket, teste: 3, conference: false, participants: [], current: 1)
     socket = if connected?(socket), do: set_user_and_room(socket, room), else: socket
     {:ok, socket}
   end
@@ -11,13 +12,13 @@ defmodule WebrtcL2LWeb.Room do
 
   def handle_event("conference", _params, socket) do
     IO.inspect(socket)
-    socket = assign(socket, conference: true)
+    socket = assign(socket, conference: true, participants: [], current: 1)
     socket = set_room(socket)
     user_id =
       ?a..?z
       |> Enum.take_random(6)
       |> List.to_string()
-    {:noreply, push_event(socket, "joining", %{participants: [], id: user_id})}
+    {:noreply, push_event(socket, "joining", %{participants: [], id: user_id, current: 1})}
   end
 
   def handle_event("icecandidate", payload, socket) do
@@ -75,4 +76,6 @@ defmodule WebrtcL2LWeb.Room do
   defp create_or_return([{pid, _}], _) do
     pid
   end
+
+
 end

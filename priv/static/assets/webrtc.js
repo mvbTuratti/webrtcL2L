@@ -5,6 +5,7 @@ const audioDropdown = document.getElementById("dropdown-audio");
 const videoDropdown = document.getElementById("dropdown-video");
 const spinner = document.getElementById("spinner");
 const videoTag = document.getElementById("video");
+videoTag.crossOrigin = 'anonymous';
 const defaultImg = document.getElementById("defaultImg");
 const videoDiv = document.getElementById("video-div");
 const cameraOn = document.getElementById("camera-on");
@@ -13,6 +14,10 @@ const audioOn = document.getElementById("mic-on");
 const audioOff = document.getElementById("mic-off");
 let audioId = "";
 let videoId = "";
+
+let localStream;
+let remoteStreams = {};
+
 audioSelect.onclick = () => {
     if (videoDropdown.className.includes('block')){
         videoDropdown.className = videoDropdown.className.replace('block', 'hidden');
@@ -101,6 +106,7 @@ function liItemCreator(content, id, type) {
 function streamStart(stream) {
     window.stream = stream; 
     videoTag.srcObject = stream;
+    localStream = stream;
 
     return navigator.mediaDevices.enumerateDevices();
 }
@@ -109,7 +115,7 @@ function streamStart(stream) {
 function start(config) {
     if (window.stream) {
         window.stream.getTracks().forEach(track => {
-        track.stop();
+            track.stop();
         });
     }
     const audioSource = audioId;
@@ -119,7 +125,7 @@ function start(config) {
         video: config.video && {deviceId: videoSource ? {exact: videoSource} : undefined}
     };
     
-    navigator.mediaDevices.getUserMedia(constraints).then(streamStart).then(e => {
+    navigator.mediaDevices.getUserMedia(constraints).then(streamStart).then(() => {
         spinner.hidden = true;
         if (config.video){
             videoDiv.hidden = false;
@@ -136,6 +142,9 @@ function videoControl(type) {
         audioOn.hidden = !audioOn.hidden;
         audioOff.hidden = !audioOff.hidden;
     } else if (type === 'camera') {
+        if (cameraOn.hidden){
+            videoTag.srcObject = null;
+        }
         cameraOn.hidden = !cameraOn.hidden;
         cameraOff.hidden = !cameraOff.hidden;
     }
@@ -164,23 +173,97 @@ setTimeout(() => {
             }
         }
       })();
-
 }, 100);
 
+
 // Code for webrtc
+
+const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
+
+const painel = document.getElementById("painel");
+const painelControler = document.getElementById("painel-controler");
+let stack = [];
+
+const hidePainel = () => {setTimeout(() => {
+    painel.className = painel.className.replace('flex', 'hidden');
+}, 1500)};
+
+
+painelControler.onmouseover = ()=>{
+    clearTimeout(hidePainel);
+    painel.className = painel.className.replace('hidden', 'flex');
+    painel.onmouseleave = () => hidePainel();
+};
+
+
+
 let participants = [];
 let id = "";
+let current = 1;
 window.addEventListener(`phx:joining`, (members) => {
     console.log(members)
+    videoTag.srcObject = null;
+    hidePainel();
     id = members.detail.id;
     participants = members.detail.participants;
+    current = members.detail.current;
     //if there's no one in the room yet, create a ICE candidate.
     if (!participants.length){
         
     }
-    document.dispatchEvent(room_event("icecandidate", []));
+    //for (let index = 1; index <= current; index++) {
+    //    const videoStream = document.getElementById(`video-${index}`)
+        //videoStream.srcObject = localStream;
+    //}
+    const currentVideo = document.getElementById('video-1');
+    currentVideo.srcObject = localStream;
+    createOffer(id);
 })
+
 
 let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });
+
+function createOffer(id) {
+    let peerConnection = new RTCPeerConnection(configuration);
+    peerConnection.ontrack = e => {
+        console.log("trackssssss on creator")
+        console.log(e.streams)
+        e.streams[0].onaddtrack = e => console.log("add track...")
+        e.streams[0].onremovetrack = e => console.log("remove track...")
+        remoteStream = e.streams[0];
+    }
+
+    let dc = peerConnection.createDataChannel("channel");
+    dc.onmessage = e => {
+        messages(e)
+    };
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    stack.push({"id": id, "pc":peerConnection, "dc": dc});
+    peerConnection.onicecandidate = e => {
+        console.log("ice candidate")
+    }
+    
+    peerConnection.createOffer().then( o => 
+        peerConnection.setLocalDescription(o)    
+    ).then(p => {
+        const iceoffer = {"id":id, "pc": peerConnection.localDescription};
+        document.dispatchEvent(room_event("icecandidate", iceoffer)); 
+    })
+    peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
+    console.log( "estado " + dc.readyState)
+}
+
+async function makeCall() {
+    const peerConnection = new RTCPeerConnection(configuration);
+    window.addEventListener(`phx:offer`, async msg => {
+        if (msg.answer) {
+            const remoteDesc = new RTCSessionDescription(msg.answer);
+            await peerConnection.setRemoteDescription(remoteDesc);
+        }
+    })
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    signalingChannel.send({'offer': offer});
+}

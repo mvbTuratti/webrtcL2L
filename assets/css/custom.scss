@@ -7,6 +7,40 @@ body {
   @apply mt-6 mx-8 duration-500 hover:transform hover:-translate-x-2 hover:translate-y-4 hover:scale-110  overflow-hidden flex-shrink-0 h-64 w-64 rounded-t-2xl rounded-lg shadow-2xl;
 }
 
+/* web conf */
+.participant-1-1{
+  @apply transition-all delay-150 h-96 w-96 justify-self-center self-center md:h-3/6 md:w-3/6 lg:h-4/6 bg-transparent rounded-md;
+}
+
+.participant-1-2{
+  @apply transition-all delay-150 h-52 w-52 justify-self-end self-center md:h-3/6 md:w-4/6 bg-gray-100 rounded-md;
+}
+.participant-2-2{
+  @apply transition-all delay-150 h-52 w-52 justify-self-start self-center md:h-3/6 md:w-4/6 bg-gray-100 rounded-md;
+}
+
+.participant-1-3{
+  @apply transition-all delay-150 h-52 w-52 justify-self-end self-center md:h-5/6 md:w-4/6 bg-gray-100 rounded-md;
+}
+.participant-2-3{
+  @apply transition-all delay-150 h-52 w-52 justify-self-start self-center md:h-5/6 md:w-4/6 bg-gray-100 rounded-md;
+}
+.participant-3-3{
+  @apply col-span-2 transition-all delay-150 h-52 w-52 justify-self-center self-start md:h-5/6 md:w-2/6 bg-gray-100 rounded-md;
+}
+
+.participant-1-4{
+  @apply transition-all delay-150 h-52 w-52 justify-self-end self-end md:h-4/6 md:w-4/6 lg:h-5/6 bg-gray-100 rounded-md;
+}
+.participant-2-4{
+  @apply transition-all delay-150 h-52 w-52 justify-self-start self-end md:h-4/6 md:w-4/6 lg:h-5/6 bg-gray-100 rounded-md;
+}
+.participant-3-4{
+  @apply transition-all delay-150 h-52 w-52 justify-self-end self-start md:h-4/6 md:w-4/6 lg:h-5/6 bg-gray-100 rounded-md;
+}
+.participant-4-4{
+  @apply transition-all delay-150 h-52 w-52 justify-self-start self-start md:h-4/6 md:w-4/6 lg:h-5/6 bg-gray-100 rounded-md;
+}
 
 /* modal */
 
