@@ -217,7 +217,7 @@ window.addEventListener(`phx:joining`, (members) => {
     //}
     const currentVideo = document.getElementById('video-1');
     currentVideo.srcObject = localStream;
-    createOffer(id);
+    makeCall(id);
 })
 
 
@@ -225,45 +225,33 @@ let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });
 
-function createOffer(id) {
-    let peerConnection = new RTCPeerConnection(configuration);
-    peerConnection.ontrack = e => {
-        console.log("trackssssss on creator")
-        console.log(e.streams)
-        e.streams[0].onaddtrack = e => console.log("add track...")
-        e.streams[0].onremovetrack = e => console.log("remove track...")
-        remoteStream = e.streams[0];
-    }
-
-    let dc = peerConnection.createDataChannel("channel");
-    dc.onmessage = e => {
-        messages(e)
-    };
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    stack.push({"id": id, "pc":peerConnection, "dc": dc});
-    peerConnection.onicecandidate = e => {
-        console.log("ice candidate")
-    }
-    
-    peerConnection.createOffer().then( o => 
-        peerConnection.setLocalDescription(o)    
-    ).then(p => {
-        const iceoffer = {"id":id, "pc": peerConnection.localDescription};
-        document.dispatchEvent(room_event("icecandidate", iceoffer)); 
-    })
-    peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
-    console.log( "estado " + dc.readyState)
-}
-
-async function makeCall() {
+async function makeCall(id) {
     const peerConnection = new RTCPeerConnection(configuration);
     window.addEventListener(`phx:offer`, async msg => {
         if (msg.answer) {
             const remoteDesc = new RTCSessionDescription(msg.answer);
             await peerConnection.setRemoteDescription(remoteDesc);
+            window.removeEventListener('phx:offer', this);
         }
     })
+    peerConnection.ontrack = e => {
+        console.log("trackssssss on creator")
+        console.log(e.streams)
+        e.streams[0].onaddtrack = e => console.log("add track...")
+        e.streams[0].onremovetrack = e => console.log("remove track...")
+        //remoteStreams = e.streams[0];
+    }
+    let dc = peerConnection.createDataChannel("channel");
+    dc.onmessage = e => {
+        messages(e)
+    };
+    peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
+    localStream.getTracks().forEach(track => {
+        console.log("track:")
+        console.log(track)
+        peerConnection.addTrack(track, localStream)});
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    signalingChannel.send({'offer': offer});
+    const iceoffer = {"id":id, "pc": peerConnection.localDescription};
+    document.dispatchEvent(room_event("icecandidate", iceoffer)); 
 }
