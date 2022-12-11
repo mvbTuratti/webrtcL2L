@@ -21,8 +21,8 @@ defmodule WebrtcL2LWeb.Room do
     {:noreply, push_event(socket, "joining", %{participants: [], id: user_id, current: 1})}
   end
 
-  def handle_event("icecandidate", payload, socket) do
-    IO.inspect(payload)
+  def handle_event("icecandidate", payload, %{assigns: %{user_id: user_id, name: name}} = socket) do
+    GenServer.call(via_tuple(name), {:add_node, user_id, payload})
     {:noreply, socket}
   end
 
