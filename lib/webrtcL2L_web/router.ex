@@ -18,6 +18,8 @@ defmodule WebrtcL2LWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :index
+    get "/teste", PageController, :teste
+
     live "/room", Room
   end
 
