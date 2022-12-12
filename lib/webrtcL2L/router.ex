@@ -20,8 +20,8 @@ defmodule WebrtcL2L.Router do
   end
 
   # Add a vertex to the graph
-  def add_vertex(vertex, icecandidate, state, icetable) do
-    :ets.insert(icetable, {vertex, icecandidate})
+  def add_vertex(%{"id" => vertex, "pc" => payload}, state, icetable) do
+    :ets.insert(icetable, {vertex, %{"pc" => payload}})
     {:ok, :digraph.add_vertex(state, vertex)}
   end
 
@@ -40,6 +40,11 @@ defmodule WebrtcL2L.Router do
     {:ok, :digraph.del_edge(state, edge)}
   end
 
+  def get_icecandidates(icetable, vertex) do
+    :ets.match(icetable, {:"$1", :"$2", [{:not_equal, vertex}]})
+      |> Enum.into([])
+  end
+
   # Calculate the shortest path between all pairs of nodes
   def all_pairs_shortest_path(state) do
     paths = for node1 <- :digraph.vertices(state), node2 <- :digraph.vertices(state), do:
@@ -53,11 +58,11 @@ defmodule WebrtcL2L.Router do
   end
 
   @impl true
-  def handle_call({:add_node, cid, icecandidate}, _from, {state, icetable}) do
+  def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {state, icetable}) do
     IO.inspect(state)
-    {:ok, graph} = add_vertex(cid, icecandidate, state,icetable)
-
-    {:reply, {graph, icetable}, @timeout}
+    {:ok, graph} = add_vertex(icecandidate, state,icetable)
+    ice_response = get_icecandidates(icetable, cid)
+    {:reply, ice_response, {graph, icetable}, @timeout}
   end
 
   @impl true

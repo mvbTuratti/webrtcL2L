@@ -4,7 +4,7 @@ defmodule WebrtcL2LWeb.Room do
   alias WebrtcL2LWeb.Components.RoomParticipants
 
   def mount(%{"room" => room}, _session, socket) do
-    socket = assign(socket, teste: 3, conference: false, participants: [], current: 1)
+    socket = assign(socket, conference: false, participants: [], current: 0)
     socket = if connected?(socket), do: set_user_and_room(socket, room), else: socket
     {:ok, socket}
   end
@@ -12,17 +12,15 @@ defmodule WebrtcL2LWeb.Room do
 
   def handle_event("conference", _params, socket) do
     IO.inspect(socket)
-    socket = assign(socket, conference: true, participants: [], current: 1)
     socket = set_room(socket)
-    user_id =
-      ?a..?z
-      |> Enum.take_random(6)
-      |> List.to_string()
-    {:noreply, push_event(socket, "joining", %{participants: [], id: user_id, current: 1})}
+
+    socket = assign(socket, conference: true, participants: [], id: socket.assigns.user_id, current: 1)
+    {:noreply, push_event(socket, "joining", %{participants: [], id: socket.assigns.user_id, current: 1})}
   end
 
-  def handle_event("icecandidate", payload, %{assigns: %{user_id: user_id, name: name}} = socket) do
-    GenServer.call(via_tuple(name), {:add_node, user_id, payload})
+  def handle_event("icecandidate", payload, %{assigns: %{name: name}} = socket) do
+    response = GenServer.call(via_tuple(name), {:add_node, payload})
+    IO.inspect(response)
     {:noreply, socket}
   end
 
@@ -55,12 +53,6 @@ defmodule WebrtcL2LWeb.Room do
   defp assign_rtc(socket, name) do
     socket
     |> assign(name: name)
-    |> assign_rtc()
-  end
-
-  defp assign_rtc(%{assigns: %{name: name}} = socket) do
-    router = GenServer.call(via_tuple(name), :router)
-    assign(socket, router: router)
   end
 
   defp get_router_pid(room) do
