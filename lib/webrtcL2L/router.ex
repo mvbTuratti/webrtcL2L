@@ -13,16 +13,15 @@ defmodule WebrtcL2L.Router do
   @impl true
   def init(_name) do
     icetable = :ets.new(:icecandidates, [:set, :protected])
-
-    graph = :digraph.new([:acyclic, :private])
-
-    {:ok, {graph, icetable}, @timeout}
+    digraph = :digraph.new([:acyclic, :private])
+    {:ok, {digraph, icetable}, @timeout}
   end
 
   # Add a vertex to the graph
-  def add_vertex(%{"id" => vertex, "pc" => payload}, state, icetable) do
+  def add_vertex(%{"id" => vertex, "pc" => payload}, digraph, icetable) do
     :ets.insert(icetable, {vertex, %{"pc" => payload}})
-    {:ok, :digraph.add_vertex(state, vertex)}
+    _d = :digraph.add_vertex(digraph, vertex)
+    {:ok, digraph}
   end
 
   # Add an edge to the graph
@@ -41,7 +40,8 @@ defmodule WebrtcL2L.Router do
   end
 
   def get_icecandidates(icetable, vertex) do
-    :ets.match(icetable, {:"$1", :"$2", [{:not_equal, vertex}]})
+    #{:not_equal, vertex}
+    :ets.match(icetable, {:"$1", :"$2", []})
       |> Enum.into([])
   end
 
@@ -58,11 +58,12 @@ defmodule WebrtcL2L.Router do
   end
 
   @impl true
-  def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {state, icetable}) do
-    IO.inspect(state)
-    {:ok, graph} = add_vertex(icecandidate, state,icetable)
+  def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {digraph, icetable}) do
+    {:ok, digraph} = add_vertex(icecandidate, digraph,icetable)
+    IO.puts("Candidado: #{cid}")
     ice_response = get_icecandidates(icetable, cid)
-    {:reply, ice_response, {graph, icetable}, @timeout}
+    IO.inspect ice_response
+    {:reply, ice_response, {digraph, icetable}, @timeout}
   end
 
   @impl true
