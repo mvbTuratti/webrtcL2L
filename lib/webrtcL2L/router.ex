@@ -40,9 +40,8 @@ defmodule WebrtcL2L.Router do
   end
 
   def get_icecandidates(icetable, vertex) do
-    #{:not_equal, vertex}
-    :ets.match(icetable, {:"$1", :"$2", []})
-      |> Enum.into([])
+    filter = [{{:"$1", :"$2"}, [{:"/=", :"$1", vertex}], [{{:"$1", :"$2"}}]}]
+    :ets.select(icetable, filter)
   end
 
   # Calculate the shortest path between all pairs of nodes
@@ -60,9 +59,7 @@ defmodule WebrtcL2L.Router do
   @impl true
   def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {digraph, icetable}) do
     {:ok, digraph} = add_vertex(icecandidate, digraph,icetable)
-    IO.puts("Candidado: #{cid}")
     ice_response = get_icecandidates(icetable, cid)
-    IO.inspect ice_response
     {:reply, ice_response, {digraph, icetable}, @timeout}
   end
 
