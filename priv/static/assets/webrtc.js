@@ -229,6 +229,11 @@ window.addEventListener(`phx:offer`, async message => {
     }
 })
 
+window.addEventListener(`phx:participants`, (message) => {
+    alert("!")
+    console.log(message)
+})
+
 let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });

@@ -1,27 +1,27 @@
 defmodule WebrtcL2L.Router do
   use GenServer, restart: :transient
+  alias WebrtcL2L.Graph
 
 
   @timeout 600_000
 
   def start_link(options) do
-    [name: {:via, Registry, {WebrtcL2L.RouterRegistry, name}}] = options
-    GenServer.start_link(__MODULE__,name, options)
+    # [name: {:via, Registry, {WebrtcL2L.RouterRegistry, name}}] = options
+    GenServer.start_link(__MODULE__, %Graph{}, options)
   end
 
   # Initialize the server state with an empty graph
   @impl true
-  def init(_name) do
-    icetable = :ets.new(:icecandidates, [:set, :protected])
+  def init(graph) do
     digraph = :digraph.new([:acyclic, :private])
-    {:ok, {digraph, icetable}, @timeout}
+    {:ok, {digraph, graph}, @timeout}
   end
 
   # Add a vertex to the graph
-  def add_vertex(%{"id" => vertex, "pc" => payload}, digraph, icetable) do
-    :ets.insert(icetable, {vertex, %{"pc" => payload}})
-    _d = :digraph.add_vertex(digraph, vertex)
-    {:ok, digraph}
+  def add_vertex(%{"id" => vertex, "pc" => payload}, digraph,  graph) do
+    graph = Graph.add_vertex(graph, vertex, payload)
+    :digraph.add_vertex(digraph, vertex)
+    {:ok, {digraph, graph}}
   end
 
   # Add an edge to the graph
@@ -39,11 +39,6 @@ defmodule WebrtcL2L.Router do
     {:ok, :digraph.del_edge(state, edge)}
   end
 
-  def get_icecandidates(icetable, vertex) do
-    filter = [{{:"$1", :"$2"}, [{:"/=", :"$1", vertex}], [{{:"$1", :"$2"}}]}]
-    :ets.select(icetable, filter)
-  end
-
   # Calculate the shortest path between all pairs of nodes
   def all_pairs_shortest_path(state) do
     paths = for node1 <- :digraph.vertices(state), node2 <- :digraph.vertices(state), do:
@@ -57,10 +52,11 @@ defmodule WebrtcL2L.Router do
   end
 
   @impl true
-  def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {digraph, icetable}) do
-    {:ok, digraph} = add_vertex(icecandidate, digraph,icetable)
-    ice_response = get_icecandidates(icetable, cid)
-    {:reply, ice_response, {digraph, icetable}, @timeout}
+  def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {digraph, graph}) do
+    {:ok, {digraph, graph}} = add_vertex(icecandidate, digraph,graph)
+    %{sdps: sdps, size: size} =  graph
+    ice_response = sdps |> Map.to_list() |> Enum.filter(fn {candidate, _} -> candidate !== cid end)
+    {:reply, [{"size", size} | ice_response], {digraph, graph}, @timeout}
   end
 
   @impl true

@@ -14,14 +14,19 @@ defmodule WebrtcL2LWeb.Room do
     IO.inspect(socket)
     socket = set_room(socket)
 
-    socket = assign(socket, conference: true, participants: [], id: socket.assigns.user_id, current: 1)
-    {:noreply, push_event(socket, "joining", %{participants: [], id: socket.assigns.user_id, current: 1})}
+    socket = assign(socket, conference: true, participants: [socket.assigns.user_id | socket.assigns.participants],
+      id: socket.assigns.user_id, current: socket.assigns.current + 1)
+    response = %{participants: socket.assigns.participants, id: socket.assigns.user_id, current: socket.assigns.current}
+    {:noreply, push_event(socket, "joining", response)}
   end
 
   def handle_event("icecandidate", payload, %{assigns: %{name: name}} = socket) do
     response = GenServer.call(via_tuple(name), {:add_node, payload})
-    IO.inspect(response)
-    {:noreply, socket}
+    payload = response
+              |> Map.new()
+
+    IO.inspect(payload)
+    {:noreply, push_event(socket, "participants", payload)}
   end
 
   def handle_event(_,_, socket) do
