@@ -54,9 +54,9 @@ defmodule WebrtcL2L.Router do
   @impl true
   def handle_call({:add_node, %{"id" => cid} = icecandidate}, _from, {digraph, graph}) do
     {:ok, {digraph, graph}} = add_vertex(icecandidate, digraph,graph)
-    %{sdps: sdps, size: size} =  graph
+    %{sdps: sdps} =  graph
     ice_response = sdps |> Map.to_list() |> Enum.filter(fn {candidate, _} -> candidate !== cid end)
-    {:reply, [{"size", size} | ice_response], {digraph, graph}, @timeout}
+    {:reply, ice_response, {digraph, graph}, @timeout}
   end
 
   @impl true

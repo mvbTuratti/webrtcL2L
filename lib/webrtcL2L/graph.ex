@@ -1,13 +1,9 @@
 defmodule WebrtcL2L.Graph do
 
-  defstruct sdps: %{},
-            size: 0,
-            participants: MapSet.new()
+  defstruct sdps: %{}
 
-  def add_vertex(%{sdps: sdps, participants: participants} = graph, member, sdp) do
-    participants = MapSet.put(participants, member)
-    size = MapSet.size(participants)
+  def add_vertex(%{sdps: sdps} = graph, member, sdp) do
     sdp = Map.put(sdps, member, sdp)
-    %{graph | sdps: sdp, participants: participants, size: size}
+    %{graph | sdps: sdp}
   end
 end
