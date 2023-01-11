@@ -1,0 +1,58 @@
+<div class="flex space-x-1 overflow-x-scroll w-full">
+  <!-- Grid items go here -->
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 1</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 2</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 3</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 4</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 5</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 6</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 7</div>
+  <div class="w-1/2 bg-cool-gray-200 rounded-sm">Item 8</div>
+
+</div>
+
+<script>
+    setTimeout(() => {
+    const container = document.querySelector('.flex');
+    const firstItem = container.firstElementChild;
+    const lastItem = container.lastElementChild;
+
+    // Clone the first and last items
+    const clonedFirstItem = firstItem.cloneNode(true);
+    const clonedLastItem = lastItem.cloneNode(true);
+
+    // Append the cloned items to the beginning and end of the container
+    container.appendChild(clonedFirstItem);
+    container.insertBefore(clonedLastItem, firstItem);
+    
+
+    container.addEventListener('scroll', () => {
+        // Get the current scroll position
+        const scrollLeft = container.scrollLeft;
+
+        // Check if the user has scrolled to the cloned first or last item
+        if (scrollLeft === 0) {
+            // Smoothly scroll to the real last item
+            container.scrollTo({
+            left: container.scrollWidth - container.clientWidth,
+            behavior: 'smooth',
+            });
+        } else if (scrollLeft + container.clientWidth === container.scrollWidth) {
+            // Smoothly scroll to the real first item
+            container.scrollTo({
+            left: firstItem.clientWidth,
+            behavior: 'smooth',
+            });
+        }
+    })}, 100);
+</script>

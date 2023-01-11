@@ -1,33 +1,93 @@
 defmodule WebrtcL2LWeb.Room do
   use WebrtcL2LWeb, :live_view
-  alias WebrtcL2L.Router
+  alias WebrtcL2L.{Router, Presence, PubSub}
   alias WebrtcL2LWeb.Components.RoomParticipants
 
+  @presence "webrtcL2L:"
+
+  @impl true
   def mount(%{"room" => room}, _session, socket) do
-    socket = assign(socket, teste: 3, conference: false, participants: [], current: 1)
+    socket = assign(socket, conference: false, participants: %{}, current: 0)
     socket = if connected?(socket), do: set_user_and_room(socket, room), else: socket
     {:ok, socket}
   end
 
-
+  @impl true
   def handle_event("conference", _params, socket) do
-    IO.inspect(socket)
-    socket = assign(socket, conference: true, participants: [], current: 1)
-    socket = set_room(socket)
-    user_id =
-      ?a..?z
-      |> Enum.take_random(6)
-      |> List.to_string()
-    {:noreply, push_event(socket, "joining", %{participants: [], id: user_id, current: 1})}
+    {:ok, _} = Presence.track(self(), @presence <> socket.assigns.room, socket.assigns.user_id, %{
+      name: socket.assigns.user_id,
+      })
+
+    Phoenix.PubSub.subscribe(PubSub, @presence <> socket.assigns.room)
+    socket = set_room(socket) |> assign(conference: true)
+    response = %{participants: socket.assigns.participants, id: socket.assigns.user_id, current: socket.assigns.current}
+    {:noreply, push_event(socket, "joining", response)}
   end
 
-  def handle_event("icecandidate", payload, socket) do
-    IO.inspect(payload)
-    {:noreply, socket}
+  @impl true
+  def handle_event("icecandidate", payload, %{assigns: %{name: name}} = socket) do
+    response = GenServer.call(via_tuple(name), {:add_node, payload})
+    payload = response |> Map.new()
+    {:noreply, push_event(socket, "participants", payload)}
   end
 
+  #Response from browser - event #x - Response ack from browser.
+  @impl true
+  def handle_event("presence-client", %{"ref" => ref, "user" => user}, socket) do
+
+    {
+      :noreply,
+      socket
+      |> handle_leaves(%{user => %{metas: [%{name: user, phx_ref: ref}]}})
+    }
+  end
+
+  @impl true
   def handle_event(_,_, socket) do
     {:noreply, socket}
+  end
+
+  # Send info to browser, step need to avoid overflow on client side. Step ObjSource needs to be emptied before removal
+  # from DOM
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: %{leaves: leaves}}, socket) when leaves != %{} do
+    [user] = Map.keys(leaves)
+    %{^user => %{metas: [%{phx_ref: ref}]}} = leaves
+
+    {
+      :noreply,
+      socket
+      |> push_event("presence", %{user: user, ref: ref})
+    }
+  end
+
+  # Change info on socket. Liveview sends the change to the client.
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff}, socket) do
+    {
+      :noreply,
+      socket
+      |> handle_joins(diff.joins)
+    }
+  end
+
+
+
+  defp handle_joins(socket, joins) do
+    Enum.reduce(joins, socket, fn {user, %{metas: [meta| _]}}, socket ->
+      assign(socket,
+      participants: Map.put(socket.assigns.participants, user, meta),
+      current: socket.assigns.current + 1)
+    end)
+  end
+
+  defp handle_leaves(socket, leaves) do
+    Enum.reduce(leaves, socket, fn {user, _}, socket ->
+      GenServer.call(via_tuple(socket.assigns.name), {:remove_node, user})
+      assign(socket,
+      participants: Map.delete(socket.assigns.participants, user),
+      current: socket.assigns.current - 1)
+    end)
   end
 
   defp via_tuple(name) do
@@ -40,6 +100,7 @@ defmodule WebrtcL2LWeb.Room do
       ?a..?z
       |> Enum.take_random(8)
       |> List.to_string()
+
     assign(socket, room: room, user_id: user_id)
   end
 
@@ -50,17 +111,10 @@ defmodule WebrtcL2LWeb.Room do
     assign_rtc(socket, room)
   end
 
-
-
   defp assign_rtc(socket, name) do
     socket
     |> assign(name: name)
-    |> assign_rtc()
-  end
-
-  defp assign_rtc(%{assigns: %{name: name}} = socket) do
-    router = GenServer.call(via_tuple(name), :router)
-    assign(socket, router: router)
+    |> handle_joins(Presence.list(@presence <> socket.assigns.room))
   end
 
   defp get_router_pid(room) do

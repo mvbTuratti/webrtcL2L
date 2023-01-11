@@ -220,6 +220,25 @@ window.addEventListener(`phx:joining`, (members) => {
     makeCall(id);
 })
 
+window.addEventListener(`phx:offer`, async message => {
+    if (message.offer) {
+        peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        signalingChannel.send({'answer': answer});
+    }
+})
+
+window.addEventListener(`phx:participants`, (message) => {
+    alert("participants")
+    console.log(message)
+})
+
+window.addEventListener(`phx:presence`, (message) => {
+    console.log(message)
+    const confirmation = {"ref": message.detail.ref, "user": message.detail.user};
+    document.dispatchEvent(room_event("presence-client", confirmation)); 
+})
 
 let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
@@ -227,11 +246,11 @@ let room_event = (message, payload) => new CustomEvent("room-event", {
 
 async function makeCall(id) {
     const peerConnection = new RTCPeerConnection(configuration);
-    window.addEventListener(`phx:offer`, async msg => {
-        if (msg.answer) {
+    window.addEventListener(`phx:response`, async msg => {
+        if (!remoteStreams[msg.id]) {
             const remoteDesc = new RTCSessionDescription(msg.answer);
             await peerConnection.setRemoteDescription(remoteDesc);
-            window.removeEventListener('phx:offer', this);
+            remoteStreams[msg.id] = msg.answer;
         }
     })
     peerConnection.ontrack = e => {
@@ -246,10 +265,7 @@ async function makeCall(id) {
         messages(e)
     };
     peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
-    localStream.getTracks().forEach(track => {
-        console.log("track:")
-        console.log(track)
-        peerConnection.addTrack(track, localStream)});
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     const iceoffer = {"id":id, "pc": peerConnection.localDescription};

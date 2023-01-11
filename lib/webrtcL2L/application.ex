@@ -12,6 +12,7 @@ defmodule WebrtcL2L.Application do
       WebrtcL2LWeb.Telemetry,
       # Start the PubSub system
       {Phoenix.PubSub, name: WebrtcL2L.PubSub},
+      WebrtcL2L.Presence,
       # Start the Endpoint (http/https)
       WebrtcL2LWeb.Endpoint,
       # Start a worker by calling: WebrtcL2L.Worker.start_link(arg)
