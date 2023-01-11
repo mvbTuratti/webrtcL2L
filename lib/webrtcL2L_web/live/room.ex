@@ -3,7 +3,7 @@ defmodule WebrtcL2LWeb.Room do
   alias WebrtcL2L.{Router, Presence, PubSub}
   alias WebrtcL2LWeb.Components.RoomParticipants
 
-  @presence "webrtcL2L:presence"
+  @presence "webrtcL2L:"
 
   @impl true
   def mount(%{"room" => room}, _session, socket) do
@@ -14,10 +14,12 @@ defmodule WebrtcL2LWeb.Room do
 
   @impl true
   def handle_event("conference", _params, socket) do
-    IO.inspect(socket)
-    socket = set_room(socket)
+    {:ok, _} = Presence.track(self(), @presence <> socket.assigns.room, socket.assigns.user_id, %{
+      name: socket.assigns.user_id,
+      })
 
-    socket = assign(socket, conference: true)
+    Phoenix.PubSub.subscribe(PubSub, @presence <> socket.assigns.room)
+    socket = set_room(socket) |> assign(conference: true)
     response = %{participants: socket.assigns.participants, id: socket.assigns.user_id, current: socket.assigns.current}
     {:noreply, push_event(socket, "joining", response)}
   end
@@ -29,22 +31,47 @@ defmodule WebrtcL2LWeb.Room do
     {:noreply, push_event(socket, "participants", payload)}
   end
 
+  #Response from browser - event #x - Response ack from browser.
+  @impl true
+  def handle_event("presence-client", %{"ref" => ref, "user" => user}, socket) do
+
+    {
+      :noreply,
+      socket
+      |> handle_leaves(%{user => %{metas: [%{name: user, phx_ref: ref}]}})
+    }
+  end
+
   @impl true
   def handle_event(_,_, socket) do
     {:noreply, socket}
   end
 
+  # Send info to browser, step need to avoid overflow on client side. Step ObjSource needs to be emptied before removal
+  # from DOM
   @impl true
-  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff}, socket) do
-    IO.puts("Diff!!!")
-    IO.inspect(diff)
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: %{leaves: leaves}}, socket) when leaves != %{} do
+    [user] = Map.keys(leaves)
+    %{^user => %{metas: [%{phx_ref: ref}]}} = leaves
+
     {
       :noreply,
       socket
-      |> handle_leaves(diff.leaves)
+      |> push_event("presence", %{user: user, ref: ref})
+    }
+  end
+
+  # Change info on socket. Liveview sends the change to the client.
+  @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff}, socket) do
+    {
+      :noreply,
+      socket
       |> handle_joins(diff.joins)
     }
   end
+
+
 
   defp handle_joins(socket, joins) do
     Enum.reduce(joins, socket, fn {user, %{metas: [meta| _]}}, socket ->
@@ -56,6 +83,7 @@ defmodule WebrtcL2LWeb.Room do
 
   defp handle_leaves(socket, leaves) do
     Enum.reduce(leaves, socket, fn {user, _}, socket ->
+      GenServer.call(via_tuple(socket.assigns.name), {:remove_node, user})
       assign(socket,
       participants: Map.delete(socket.assigns.participants, user),
       current: socket.assigns.current - 1)
@@ -72,12 +100,7 @@ defmodule WebrtcL2LWeb.Room do
       ?a..?z
       |> Enum.take_random(8)
       |> List.to_string()
-    {:ok, _} = Presence.track(self(), @presence, user_id, %{
-      name: user_id,
-      joined_at: :os.system_time(:seconds)
-    })
 
-    Phoenix.PubSub.subscribe(PubSub, @presence)
     assign(socket, room: room, user_id: user_id)
   end
 
@@ -88,12 +111,10 @@ defmodule WebrtcL2LWeb.Room do
     assign_rtc(socket, room)
   end
 
-
-
   defp assign_rtc(socket, name) do
     socket
     |> assign(name: name)
-    |> handle_joins(Presence.list(@presence))
+    |> handle_joins(Presence.list(@presence <> socket.assigns.room))
   end
 
   defp get_router_pid(room) do

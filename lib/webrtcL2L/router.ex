@@ -30,8 +30,11 @@ defmodule WebrtcL2L.Router do
   end
 
   # Remove a vertex from the graph
-  def remove_vertex(vertex, state) do
-    {:ok, :digraph.del_vertex(state, vertex)}
+  def remove_vertex(vertex, digraph, graph) do
+    graph = Graph.remove_vertex(graph, vertex)
+    :digraph.del_vertex(digraph, vertex)
+    :digraph.info(digraph)
+    {:ok, {digraph, graph}}
   end
 
   # Remove an edge from the graph
@@ -57,6 +60,12 @@ defmodule WebrtcL2L.Router do
     %{sdps: sdps} =  graph
     ice_response = sdps |> Map.to_list() |> Enum.filter(fn {candidate, _} -> candidate !== cid end)
     {:reply, ice_response, {digraph, graph}, @timeout}
+  end
+
+  @impl true
+  def handle_call({:remove_node, cid}, _from, {digraph, graph}) do
+    {:ok, {digraph, graph}} = remove_vertex(cid, digraph,graph)
+    {:reply, :ok, {digraph, graph}, @timeout}
   end
 
   @impl true

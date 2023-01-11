@@ -230,8 +230,14 @@ window.addEventListener(`phx:offer`, async message => {
 })
 
 window.addEventListener(`phx:participants`, (message) => {
-    alert("!")
+    alert("participants")
     console.log(message)
+})
+
+window.addEventListener(`phx:presence`, (message) => {
+    console.log(message)
+    const confirmation = {"ref": message.detail.ref, "user": message.detail.user};
+    document.dispatchEvent(room_event("presence-client", confirmation)); 
 })
 
 let room_event = (message, payload) => new CustomEvent("room-event", {

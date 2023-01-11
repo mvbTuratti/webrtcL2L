@@ -6,4 +6,9 @@ defmodule WebrtcL2L.Graph do
     sdp = Map.put(sdps, member, sdp)
     %{graph | sdps: sdp}
   end
+
+  def remove_vertex(graph, member) do
+    sdps = Map.delete(graph.sdps, member)
+    %{graph | sdps: sdps}
+  end
 end
