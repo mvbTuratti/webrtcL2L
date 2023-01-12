@@ -11,4 +11,9 @@ defmodule WebrtcL2L.Graph do
     sdps = Map.delete(graph.sdps, member)
     %{graph | sdps: sdps}
   end
+
+  def list_sdps(graph, member) do
+    sdps = Map.delete(graph.sdps, member)
+    %{graph | sdps: sdps}
+  end
 end

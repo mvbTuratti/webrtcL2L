@@ -24,6 +24,11 @@ defmodule WebrtcL2L.Router do
     {:ok, {digraph, graph}}
   end
 
+  def list_sdps(graph, cid) do
+    graph = Graph.list_sdps(graph, cid)
+    IO.inspect(graph)
+    {:ok, graph}
+  end
   # Add an edge to the graph
   def add_edge(from, to, weight, state) do
     {:ok, :digraph.add_edge(state, from, to, weight)}
@@ -60,6 +65,13 @@ defmodule WebrtcL2L.Router do
     %{sdps: sdps} =  graph
     ice_response = sdps |> Map.to_list() |> Enum.filter(fn {candidate, _} -> candidate !== cid end)
     {:reply, ice_response, {digraph, graph}, @timeout}
+  end
+
+  @impl true
+  def handle_call({:list_nodes, %{"id" => cid}}, _, {digraph, graph}) do
+    IO.inspect(graph)
+    {:ok, graph} = list_sdps(graph, cid)
+    {:reply, graph, {digraph, graph}, @timeout}
   end
 
   @impl true
