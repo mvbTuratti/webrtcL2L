@@ -26,7 +26,7 @@ defmodule WebrtcL2L.Router do
 
   def list_sdps(graph, cid) do
     graph = Graph.list_sdps(graph, cid)
-    IO.inspect(graph)
+    # IO.inspect(graph)
     {:ok, graph}
   end
   # Add an edge to the graph
@@ -69,7 +69,7 @@ defmodule WebrtcL2L.Router do
 
   @impl true
   def handle_call({:list_nodes, %{"id" => cid}}, _, {digraph, graph}) do
-    IO.inspect(graph)
+    # IO.inspect(graph)
     {:ok, graph} = list_sdps(graph, cid)
     {:reply, graph, {digraph, graph}, @timeout}
   end
@@ -82,7 +82,7 @@ defmodule WebrtcL2L.Router do
 
   @impl true
   def handle_cast({:info, source}, router) do
-    IO.inspect(source)
+    # IO.inspect(source)
     {:noreply, router, @timeout}
   end
 end

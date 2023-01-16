@@ -246,6 +246,7 @@ window.addEventListener(`phx:participants`, (message) => {
     console.log(message)
 })
 
+// This event listener is needed for safely removing srcObj from client. 
 window.addEventListener(`phx:presence`, (message) => {
     console.log(message)
     const confirmation = {"ref": message.detail.ref, "user": message.detail.user};
@@ -323,41 +324,6 @@ function answerPeer(peer) {
 
 }
 
-// async function answer(peer) {
-//     const peerConnection = new RTCPeerConnection(configuration);
-//     console.log(peer)
-//     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-//     peerConnection.ontrack = e => {
-//         console.log("trackssss...")
-//         console.log(e.streams)
-//         remoteStream = e.streams[0];
-//         e.streams[0].onaddtrack = e => console.log("add track...")
-//         e.streams[0].onremovetrack = e => console.log("remove track...")
-//     }
-//     peerConnection.onicecandidate = e => {
-//         // const iceresponse = {"id": client, "pc":peerConnection.localDescription};
-//         // document.dispatchEvent(room_event("icecandidate-response", iceresponse));
-//         console.log(e);
-//     }
-//     peerConnection.ondatachannel = e => {
-//         peerConnection.dc = e.channel;
-//         peerConnection.dc.onmessage = e => {
-//             messages(e);
-//         }
-        
-//         peerConnection.dc.onopen = e => {
-//             remotePeers.push({"id":peer["id"], "pc": peerConnection, "dc": peerConnection.dc});
-//             // drawPeer(peer["id"])
-//         } 
-//     }
-//     peerConnection.setRemoteDescription(new RTCSessionDescription({sdp: peer.sdp, type: peer.offer}));
-//     const answer = await peerConnection.createAnswer();
-//     await peerConnection.setLocalDescription(answer);
-//     const iceresponse = {"id": client, "pc":answer};
-//     document.dispatchEvent(room_event("icecandidate-response", iceresponse));
-//     // signalingChannel.send({'answer': answer});
-// }
-
 function createOffer(client) {
     let peerConnection = new RTCPeerConnection(configuration);
     peerConnection.ontrack = e => {
@@ -389,9 +355,11 @@ function createOffer(client) {
     })
     peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
     window.addEventListener(`phx:response`, async msg => {
-        if (msg.id === id) {
-            peerConnection.setRemoteDescription(msg.pc);
-            remoteStreams[msg.id] = msg.answer;
+        alert("Response!")
+        console.log(msg)
+        if (msg.detail.id === id) {
+            peerConnection.setRemoteDescription(msg.detail.pc);
+            remoteStreams[msg.detail.from] = msg.detail.answer;
             dc.onopen = e => console.log("estado open");
         }
     })

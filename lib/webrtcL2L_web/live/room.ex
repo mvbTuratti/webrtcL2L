@@ -34,8 +34,8 @@ defmodule WebrtcL2LWeb.Room do
 
   @impl true
   def handle_event("icecandidate-response", payload, socket) do
-    IO.puts("ice candidate response")
-    IO.inspect(payload)
+    # IO.puts("ice candidate response")
+    # IO.inspect(payload)
     Phoenix.PubSub.broadcast(PubSub, @presence <> socket.assigns.room, {:response, payload})
     {:noreply, socket}
   end
@@ -56,10 +56,10 @@ defmodule WebrtcL2LWeb.Room do
   end
 
   def handle_info({:response, payload = %{"id" => id}}, socket) do
-    IO.puts("Response!!")
+    # IO.puts("Response!!")
     # IO.inspect(payload)
     # IO.inspect(id)
-    IO.inspect(socket.assigns)
+    # IO.inspect(socket.assigns)
     if socket.assigns.user_id == id, do: {:noreply, push_event(socket, "response", payload)}, else: {:noreply, socket}
 
   end
@@ -70,7 +70,7 @@ defmodule WebrtcL2LWeb.Room do
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: %{leaves: leaves}}, socket) when leaves != %{} do
     [user] = Map.keys(leaves)
     %{^user => %{metas: [%{phx_ref: ref}]}} = leaves
-
+    IO.puts("presence diff")
     {
       :noreply,
       socket
