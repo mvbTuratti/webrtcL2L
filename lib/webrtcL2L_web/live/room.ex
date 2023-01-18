@@ -27,8 +27,12 @@ defmodule WebrtcL2LWeb.Room do
 
   @impl true
   def handle_event("icecandidate", payload, %{assigns: %{name: name}} = socket) do
+    IO.puts("ice candidate!")
     response = GenServer.call(via_tuple(name), {:add_node, payload})
     payload = response |> Map.new()
+    r = GenServer.call(via_tuple(name), :list)
+    IO.inspect(r.sdps)
+    IO.inspect(Map.keys(r.sdps))
     {:noreply, push_event(socket, "participants", payload)}
   end
 

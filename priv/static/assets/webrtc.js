@@ -17,6 +17,15 @@ let videoId = "";
 
 let localStream;
 let remoteStreams = {};
+
+const remoteProxy = new Proxy(remoteStreams, {
+    set: function (target, key, value) {
+     console.log(`${key} set from ${remoteStreams.key} to ${value}`);
+     target[key] = value;
+     return true;
+   },
+});
+
 let remoteStream;
 
 audioSelect.onclick = () => {
@@ -183,7 +192,6 @@ const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
 
 const painel = document.getElementById("painel");
 const painelControler = document.getElementById("painel-controler");
-let remotePeers = [];
 
 const hidePainel = () => {setTimeout(() => {
     painel.className = painel.className.replace('flex', 'hidden');
@@ -211,7 +219,7 @@ window.addEventListener(`phx:joining`, (members) => {
     //if there's no one in the room yet, create a ICE candidate.
     if (current === 1){
         // makeCall(id);
-        createOffer(id);
+        createOffer();
     } else {
         for (const sdp in sdps) {
             if (Object.hasOwnProperty.call(sdps, sdp)) {
@@ -221,13 +229,8 @@ window.addEventListener(`phx:joining`, (members) => {
                 answerPeer(element);
             }
         }
-        // makeCall(id);
-        createOffer(id);
     }
-    //for (let index = 1; index <= current; index++) {
-    //    const videoStream = document.getElementById(`video-${index}`)
-        //videoStream.srcObject = localStream;
-    //}
+
     const currentVideo = document.getElementById('video-1');
     currentVideo.srcObject = localStream;
 })
@@ -249,6 +252,7 @@ window.addEventListener(`phx:participants`, (message) => {
 // This event listener is needed for safely removing srcObj from client. 
 window.addEventListener(`phx:presence`, (message) => {
     console.log(message)
+    current--;
     const confirmation = {"ref": message.detail.ref, "user": message.detail.user};
     document.dispatchEvent(room_event("presence-client", confirmation)); 
 })
@@ -257,39 +261,8 @@ let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });
 
-// async function makeCall(id) {
-//     const peerConnection = new RTCPeerConnection(configuration);
-//     window.addEventListener(`phx:response`, async msg => {
-//         if (!remoteStreams[msg.id]) {
-//             const remoteDesc = new RTCSessionDescription(msg.answer);
-//             await peerConnection.setRemoteDescription(remoteDesc);
-//             remoteStreams[msg.id] = msg.answer;
-//             makeCall(id);
-//         }
-//     })
-//     peerConnection.ontrack = e => {
-//         console.log("trackssssss on creator")
-//         console.log(e.streams)
-//         e.streams[0].onaddtrack = e => console.log("add track...")
-//         e.streams[0].onremovetrack = e => console.log("remove track...")
-//         //remoteStreams = e.streams[0];
-//     }
-//     let dc = peerConnection.createDataChannel("channel");
-//     dc.onmessage = e => {
-//         messages(e)
-//     };
-//     peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
-//     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-//     const offer = await peerConnection.createOffer();
-//     await peerConnection.setLocalDescription(offer);
-//     const iceoffer = {"id":id, "pc": offer};
-//     document.dispatchEvent(room_event("icecandidate", iceoffer)); 
-// }
-
 function answerPeer(peer) {
     let peerConnection = new RTCPeerConnection(configuration);
-    console.log("Answer peer")
-    console.log(peer)
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     peerConnection.ontrack = e => {
         console.log("trackssss...")
@@ -299,10 +272,25 @@ function answerPeer(peer) {
         e.streams[0].onremovetrack = e => console.log("remove track...")
     }
     peerConnection.onicecandidate = e => {
-        // const iceresponse = {"id": peer.id, "pc":peerConnection.localDescription};
-        // document.dispatchEvent(room_event("icecandidate-response", iceresponse));
-        console.log("answer on ice candidate")
+        // console.log("answer on ice candidate")
+        // console.log(e)
     }
+    peerConnection.addEventListener("icegatheringstatechange", (ev) => {
+        switch(peerConnection.iceGatheringState) {
+          case "new":
+            /* gathering is either just starting or has been reset */
+            break;
+          case "gathering":
+            /* gathering has begun or is ongoing */
+            break;
+          case "complete":
+            /* gathering has ended */
+            console.log("complete state!")
+            remoteProxy[peer["id"]] = {pc: peerConnection, dc: peerConnection.dc};
+            createOffer();
+            break;
+        }
+    });
     peerConnection.ondatachannel = e => {
         peerConnection.dc = e.channel;
         peerConnection.dc.onmessage = e => {
@@ -310,12 +298,11 @@ function answerPeer(peer) {
         }
         
         peerConnection.dc.onopen = e => {
-            remotePeers.push({"id":peer["id"], "pc": peerConnection, "dc": peerConnection.dc});
-            // drawPeer(peer["id"])
+            console.log("dc open")
+            
         } 
     }
     peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
-    console.log(peer)
     peerConnection.setRemoteDescription(peer).then(a => console.log("offer set"))
     peerConnection.createAnswer().then(a => peerConnection.setLocalDescription(a)).then(a => {
         const iceresponse = {"id": peer.id, "pc":peerConnection.localDescription, from: id};
@@ -324,7 +311,7 @@ function answerPeer(peer) {
 
 }
 
-function createOffer(client) {
+function createOffer() {
     let peerConnection = new RTCPeerConnection(configuration);
     peerConnection.ontrack = e => {
         console.log("trackssssss on creator")
@@ -336,13 +323,11 @@ function createOffer(client) {
 
     let dc = peerConnection.createDataChannel("channel");
     dc.onmessage = e => {
-        messages(e)
+        //messages
+        console.log(e)
     };
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    remotePeers.push({"id": client, "pc":peerConnection, "dc": dc});
     peerConnection.onicecandidate = e => {
-        // const iceoffer = {"id":id, "pc": peerConnection.localDescription};
-        // document.dispatchEvent(room_event("icecandidate", iceoffer)); 
         console.log("icecandidate")
     }
     
@@ -355,13 +340,13 @@ function createOffer(client) {
     })
     peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
     window.addEventListener(`phx:response`, async msg => {
-        alert("Response!")
-        console.log(msg)
         if (msg.detail.id === id) {
             peerConnection.setRemoteDescription(msg.detail.pc);
-            remoteStreams[msg.detail.from] = msg.detail.answer;
+            remoteProxy[msg.detail.from] = {pc: peerConnection, dc: dc};
             dc.onopen = e => console.log("estado open");
+            createOffer();
         }
     })
     console.log( "estado " + dc.readyState)
 }
+

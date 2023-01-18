@@ -68,6 +68,11 @@ defmodule WebrtcL2L.Router do
   end
 
   @impl true
+  def handle_call(:list, _, {digraph, graph}) do
+    {:reply, graph, {digraph, graph}, @timeout}
+  end
+
+  @impl true
   def handle_call({:list_nodes, %{"id" => cid}}, _, {digraph, graph}) do
     # IO.inspect(graph)
     {:ok, graph} = list_sdps(graph, cid)
@@ -81,7 +86,7 @@ defmodule WebrtcL2L.Router do
   end
 
   @impl true
-  def handle_cast({:info, source}, router) do
+  def handle_cast({:info, _source}, router) do
     # IO.inspect(source)
     {:noreply, router, @timeout}
   end

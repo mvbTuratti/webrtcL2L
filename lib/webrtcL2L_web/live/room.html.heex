@@ -77,7 +77,7 @@
       </div>
     </div>
     <div id="room-event" phx-hook="CreateEvent" class={"#{if @conference, do: "flex", else: "hidden"}"}>
-        
+
         <%= if @conference do %>
             <div class={"grid #{if @current === 1, do: "grid-cols-1", else: "grid-cols-2"} justify-items-center h-screen w-screen align-items-center gap-4"}>
                 <RoomParticipants.participants quantity={@current} />
