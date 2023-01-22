@@ -18,8 +18,8 @@ defmodule WebrtcL2L.Router do
   end
 
   # Add a vertex to the graph
-  def add_vertex(%{"id" => vertex, "pc" => payload}, digraph,  graph) do
-    graph = Graph.add_vertex(graph, vertex, payload)
+  def add_vertex(%{"id" => vertex, "pc" => payload, "hash" => hash}, digraph,  graph) do
+    graph = Graph.add_vertex(graph, vertex, {payload, hash})
     :digraph.add_vertex(digraph, vertex)
     {:ok, {digraph, graph}}
   end

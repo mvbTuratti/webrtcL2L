@@ -28,6 +28,7 @@ defmodule WebrtcL2LWeb.Room do
   @impl true
   def handle_event("icecandidate", payload, %{assigns: %{name: name}} = socket) do
     IO.puts("ice candidate!")
+    IO.inspect(payload)
     _response = GenServer.call(via_tuple(name), {:add_node, payload})
     r = GenServer.call(via_tuple(name), :list)
     IO.inspect(r.sdps)
@@ -42,6 +43,7 @@ defmodule WebrtcL2LWeb.Room do
     Phoenix.PubSub.broadcast(PubSub, @presence <> socket.assigns.room, {:response, payload})
     {:noreply, socket}
   end
+
 
   #Response from browser - event #x - Response ack from browser.
   @impl true
