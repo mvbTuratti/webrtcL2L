@@ -17,6 +17,7 @@ let videoId = "";
 
 let localStream;
 let remoteStreams = {size: 1};
+let configSettings = {audio: true, video: true};
 
 const remoteProxy = new Proxy(remoteStreams, {
     set: function (target, key, value) {
@@ -107,7 +108,7 @@ function liItemCreator(content, id, type) {
             audioId = id;
         }
         anchor.className += " bg-gray-100";
-        start();
+        start(configSettings);
     };
     li.appendChild(anchor);
 
@@ -124,6 +125,7 @@ function streamStart(stream) {
   
 
 function start(config) {
+    console.log(config)
     if (window.stream) {
         window.stream.getTracks().forEach(track => {
             track.stop();
@@ -159,10 +161,22 @@ function videoControl(type) {
         cameraOn.hidden = !cameraOn.hidden;
         cameraOff.hidden = !cameraOff.hidden;
     }
-    let constraints = {audio: audioOn.hidden, video: cameraOn.hidden}
-    const fun = (async () => {   
-        await navigator.mediaDevices.getUserMedia(constraints);
-        start(constraints);
+    configSettings = {audio: audioOn.hidden, video: cameraOn.hidden}
+    const fun = (async () => {
+        try {
+            await navigator.mediaDevices.getUserMedia(configSettings);
+            start(configSettings);
+        } catch {
+            console.log("h")
+            if (window.stream) {
+                window.stream.getTracks().forEach(track => {
+                    track.stop();
+                });
+            }
+            spinner.hidden = true;
+            videoDiv.hidden = true;
+            defaultImg.hidden = false;
+        }
     })();
 }
 
