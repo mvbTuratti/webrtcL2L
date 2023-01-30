@@ -79,8 +79,16 @@
     <div id="room-event" phx-hook="CreateEvent" class={"#{if @conference, do: "flex", else: "hidden"}"}>
 
         <%= if @conference do %>
-            <div class={"grid #{if @current === 1, do: "grid-cols-1", else: "grid-cols-2"} justify-items-center h-screen w-screen align-items-center gap-4"}>
-                <RoomParticipants.participants quantity={@current} />
+            <div class="flex flex-1">
+                <button id="salas-left" class="hidden items-center">
+                    <img class="h-6 w-6 mb-8" src="images/left.svg" alt="left">
+                </button>
+                <div class={"grid #{if @current === 1, do: "grid-cols-1", else: "grid-cols-2"} justify-items-center h-screen w-screen align-items-center gap-4"}>
+                    <RoomParticipants.participants quantity={@current} />
+                </div>
+                <button id="salas-right" class="hidden items-center">
+                    <img class="h-6 w-6 mb-8" src="images/right.svg" alt="right">
+                </button>
             </div>
         <% end %>
 

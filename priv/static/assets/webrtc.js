@@ -19,11 +19,18 @@ let localStream;
 let remoteStreams = {size: 1};
 let configSettings = {audio: true, video: true};
 
+let currentView = 1;
+
+
 const remoteProxy = new Proxy(remoteStreams, {
     set: function (target, key, value) {
      console.log(`${key} set from ${remoteStreams.key} to ${value}, target = ${target.size}`);
+
      if (!(key in target)) target.size += 1;
      target[key] = value;
+     if (target.size > 4 && currentView == 1){
+        document.getElementById("salas-right").style.display = "block";
+     }
      return true;
    },
 });
@@ -249,6 +256,52 @@ window.addEventListener(`phx:joining`, (members) => {
 
     const currentVideo = document.getElementById('video-1');
     currentVideo.srcObject = localStream;
+    const left = document.getElementById("salas-left");
+    const right = document.getElementById("salas-right");
+    left.addEventListener('click', () => {
+        if (currentView > 4){
+            for (let index = 0; index < 4; index++) {
+                try {
+                    const videoParent = document.getElementById(`video-${currentView + index}`).parentNode;
+                    videoParent.style.display = "none";    
+                } catch (error) {
+                    //
+                }
+                if (currentView - index - 1> 0){
+                    const videoParent = document.getElementById(`video-${currentView - 1 - index}`).parentNode;
+                    videoParent.style.display = "block";
+                }
+            }
+            currentView = currentView - 4;
+            right.style.display = "block";
+        }
+        if (currentView < 4){
+            left.style.display = "none";
+        }
+    })
+    right.addEventListener('click', () => {
+        if (remoteProxy.size > 4){
+            for (let index = 0; index < 4; index++) {
+                try {
+                    const videoParent = document.getElementById(`video-${currentView + 4 + index}`).parentNode;
+                    videoParent.style.display = "block";    
+                } catch (error) {
+                    console.log(`skipping video-${currentView + 4 + index}`);
+                }
+                try {
+                    const videoParent = document.getElementById(`video-${currentView + index}`).parentNode;
+                    videoParent.style.display = "none";
+                } catch (error){
+                    console.log(`skipping video-${currentView + index}`);
+                }
+            }
+            currentView = currentView + 4;
+            left.style.display = "block";
+        }
+        if (remoteProxy.size - currentView < 5){
+            right.style.display = "none";
+        }
+    })
 })
 
 window.addEventListener(`phx:offer`, async message => {
@@ -278,15 +331,8 @@ let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });
 function setVideoStream(stream, streamsHash) {
-    console.log("SET VIDEO STREAMS!")
-    console.log(stream)
-    console.log(streamsHash)
-    console.log(remoteProxy)
     for (key of Object.keys(remoteProxy)){
         if (remoteProxy[key].hasOwnProperty('hash') && remoteProxy[key].hash == streamsHash){
-            console.log("set video stream");
-            console.log(`video-${remoteProxy[key].stamp}`);
-            console.log(stream);
             const videoHandler = document.getElementById(`video-${remoteProxy[key].stamp}`);
             videoHandler.srcObject = stream;
             return true;
@@ -294,6 +340,7 @@ function setVideoStream(stream, streamsHash) {
     } 
     return false;
 }
+
 
 
 function answerPeer(peer) {
@@ -305,8 +352,6 @@ function answerPeer(peer) {
     remoteProxy[peer["id"]] = {pc: peerConnection, dc: peerConnection.dc, hash: streamsHash, stamp: size};
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     peerConnection.ontrack = e => {
-        console.log("trackssss...")
-        console.log(e.streams)
         let isStreaming = setVideoStream(e.streams[0], streamsHash);
         if (!isStreaming){
             setTimeout(setVideoStream, 15000);
