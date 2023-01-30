@@ -18,12 +18,17 @@ defmodule WebrtcL2L.Router do
   end
 
   # Add a vertex to the graph
-  def add_vertex(%{"id" => vertex, "pc" => payload}, digraph,  graph) do
-    graph = Graph.add_vertex(graph, vertex, payload)
+  def add_vertex(%{"id" => vertex, "pc" => payload, "hash" => hash}, digraph,  graph) do
+    graph = Graph.add_vertex(graph, vertex, {payload, hash})
     :digraph.add_vertex(digraph, vertex)
     {:ok, {digraph, graph}}
   end
 
+  def list_sdps(graph, cid) do
+    graph = Graph.list_sdps(graph, cid)
+    # IO.inspect(graph)
+    {:ok, graph}
+  end
   # Add an edge to the graph
   def add_edge(from, to, weight, state) do
     {:ok, :digraph.add_edge(state, from, to, weight)}
@@ -63,14 +68,26 @@ defmodule WebrtcL2L.Router do
   end
 
   @impl true
+  def handle_call(:list, _, {digraph, graph}) do
+    {:reply, graph, {digraph, graph}, @timeout}
+  end
+
+  @impl true
+  def handle_call({:list_nodes, %{"id" => cid}}, _, {digraph, graph}) do
+    # IO.inspect(graph)
+    {:ok, graph} = list_sdps(graph, cid)
+    {:reply, graph, {digraph, graph}, @timeout}
+  end
+
+  @impl true
   def handle_call({:remove_node, cid}, _from, {digraph, graph}) do
     {:ok, {digraph, graph}} = remove_vertex(cid, digraph,graph)
     {:reply, :ok, {digraph, graph}, @timeout}
   end
 
   @impl true
-  def handle_cast({:info, source}, router) do
-    IO.inspect(source)
+  def handle_cast({:info, _source}, router) do
+    # IO.inspect(source)
     {:noreply, router, @timeout}
   end
 end

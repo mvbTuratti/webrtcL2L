@@ -13,28 +13,41 @@ defmodule WebrtcL2LWeb.Room do
   end
 
   @impl true
-  def handle_event("conference", _params, socket) do
-    {:ok, _} = Presence.track(self(), @presence <> socket.assigns.room, socket.assigns.user_id, %{
-      name: socket.assigns.user_id,
+  def handle_event("conference", _params, %{assigns: %{user_id: id}} = socket) do
+    {:ok, _} = Presence.track(self(), @presence <> socket.assigns.room, id, %{
+      name: id,
       })
 
     Phoenix.PubSub.subscribe(PubSub, @presence <> socket.assigns.room)
     socket = set_room(socket) |> assign(conference: true)
-    response = %{participants: socket.assigns.participants, id: socket.assigns.user_id, current: socket.assigns.current}
-    {:noreply, push_event(socket, "joining", response)}
+    response = GenServer.call(via_tuple(socket.assigns.name), {:list_nodes, %{"id" => id}})
+    payload = %{id: id, current: socket.assigns.current, sdps: response.sdps}
+    {:noreply, push_event(socket, "joining", payload)}
   end
 
   @impl true
   def handle_event("icecandidate", payload, %{assigns: %{name: name}} = socket) do
-    response = GenServer.call(via_tuple(name), {:add_node, payload})
-    payload = response |> Map.new()
-    {:noreply, push_event(socket, "participants", payload)}
+    IO.puts("ice candidate!")
+    IO.inspect(payload)
+    _response = GenServer.call(via_tuple(name), {:add_node, payload})
+    r = GenServer.call(via_tuple(name), :list)
+    IO.inspect(r.sdps)
+    IO.inspect(Map.keys(r.sdps))
+    {:noreply, socket}
   end
+
+  @impl true
+  def handle_event("icecandidate-response", payload, socket) do
+    # IO.puts("ice candidate response")
+    # IO.inspect(payload)
+    Phoenix.PubSub.broadcast(PubSub, @presence <> socket.assigns.room, {:response, payload})
+    {:noreply, socket}
+  end
+
 
   #Response from browser - event #x - Response ack from browser.
   @impl true
   def handle_event("presence-client", %{"ref" => ref, "user" => user}, socket) do
-
     {
       :noreply,
       socket
@@ -47,13 +60,22 @@ defmodule WebrtcL2LWeb.Room do
     {:noreply, socket}
   end
 
+  def handle_info({:response, payload = %{"id" => id}}, socket) do
+    # IO.puts("Response!!")
+    # IO.inspect(payload)
+    # IO.inspect(id)
+    # IO.inspect(socket.assigns)
+    if socket.assigns.user_id == id, do: {:noreply, push_event(socket, "response", payload)}, else: {:noreply, socket}
+
+  end
+
   # Send info to browser, step need to avoid overflow on client side. Step ObjSource needs to be emptied before removal
   # from DOM
   @impl true
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: %{leaves: leaves}}, socket) when leaves != %{} do
     [user] = Map.keys(leaves)
     %{^user => %{metas: [%{phx_ref: ref}]}} = leaves
-
+    IO.puts("presence diff")
     {
       :noreply,
       socket
@@ -71,6 +93,8 @@ defmodule WebrtcL2LWeb.Room do
     }
   end
 
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
 
 
   defp handle_joins(socket, joins) do

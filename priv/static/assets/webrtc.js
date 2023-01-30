@@ -16,7 +16,26 @@ let audioId = "";
 let videoId = "";
 
 let localStream;
-let remoteStreams = {};
+let remoteStreams = {size: 1};
+let configSettings = {audio: true, video: true};
+
+let currentView = 1;
+
+
+const remoteProxy = new Proxy(remoteStreams, {
+    set: function (target, key, value) {
+     console.log(`${key} set from ${remoteStreams.key} to ${value}, target = ${target.size}`);
+
+     if (!(key in target)) target.size += 1;
+     target[key] = value;
+     if (target.size > 4 && currentView == 1){
+        document.getElementById("salas-right").style.display = "block";
+     }
+     return true;
+   },
+});
+
+let remoteStream = {};
 
 audioSelect.onclick = () => {
     if (videoDropdown.className.includes('block')){
@@ -96,7 +115,7 @@ function liItemCreator(content, id, type) {
             audioId = id;
         }
         anchor.className += " bg-gray-100";
-        start();
+        start(configSettings);
     };
     li.appendChild(anchor);
 
@@ -113,6 +132,7 @@ function streamStart(stream) {
   
 
 function start(config) {
+    console.log(config)
     if (window.stream) {
         window.stream.getTracks().forEach(track => {
             track.stop();
@@ -148,10 +168,22 @@ function videoControl(type) {
         cameraOn.hidden = !cameraOn.hidden;
         cameraOff.hidden = !cameraOff.hidden;
     }
-    let constraints = {audio: audioOn.hidden, video: cameraOn.hidden}
-    const fun = (async () => {   
-        await navigator.mediaDevices.getUserMedia(constraints);
-        start(constraints);
+    configSettings = {audio: audioOn.hidden, video: cameraOn.hidden}
+    const fun = (async () => {
+        try {
+            await navigator.mediaDevices.getUserMedia(configSettings);
+            start(configSettings);
+        } catch {
+            console.log("h")
+            if (window.stream) {
+                window.stream.getTracks().forEach(track => {
+                    track.stop();
+                });
+            }
+            spinner.hidden = true;
+            videoDiv.hidden = true;
+            defaultImg.hidden = false;
+        }
     })();
 }
 
@@ -182,7 +214,6 @@ const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
 
 const painel = document.getElementById("painel");
 const painelControler = document.getElementById("painel-controler");
-let stack = [];
 
 const hidePainel = () => {setTimeout(() => {
     painel.className = painel.className.replace('flex', 'hidden');
@@ -201,23 +232,76 @@ let participants = [];
 let id = "";
 let current = 1;
 window.addEventListener(`phx:joining`, (members) => {
-    console.log(members)
+    // console.log(members)
     videoTag.srcObject = null;
     hidePainel();
     id = members.detail.id;
-    participants = members.detail.participants;
+    sdps = members.detail.sdps;
     current = members.detail.current;
+
     //if there's no one in the room yet, create a ICE candidate.
-    if (!participants.length){
-        
+    if (current === 1){
+        // makeCall(id);
+        createOffer();
+    } else {
+        for (const sdp in sdps) {
+            if (Object.hasOwnProperty.call(sdps, sdp)) {
+                const element = sdps[sdp];
+                element.id = sdp;
+                // console.log(element)
+                answerPeer(element);
+            }
+        }
     }
-    //for (let index = 1; index <= current; index++) {
-    //    const videoStream = document.getElementById(`video-${index}`)
-        //videoStream.srcObject = localStream;
-    //}
+
     const currentVideo = document.getElementById('video-1');
     currentVideo.srcObject = localStream;
-    makeCall(id);
+    const left = document.getElementById("salas-left");
+    const right = document.getElementById("salas-right");
+    left.addEventListener('click', () => {
+        if (currentView > 4){
+            for (let index = 0; index < 4; index++) {
+                try {
+                    const videoParent = document.getElementById(`video-${currentView + index}`).parentNode;
+                    videoParent.style.display = "none";    
+                } catch (error) {
+                    //
+                }
+                if (currentView - index - 1> 0){
+                    const videoParent = document.getElementById(`video-${currentView - 1 - index}`).parentNode;
+                    videoParent.style.display = "block";
+                }
+            }
+            currentView = currentView - 4;
+            right.style.display = "block";
+        }
+        if (currentView < 4){
+            left.style.display = "none";
+        }
+    })
+    right.addEventListener('click', () => {
+        if (remoteProxy.size > 4){
+            for (let index = 0; index < 4; index++) {
+                try {
+                    const videoParent = document.getElementById(`video-${currentView + 4 + index}`).parentNode;
+                    videoParent.style.display = "block";    
+                } catch (error) {
+                    console.log(`skipping video-${currentView + 4 + index}`);
+                }
+                try {
+                    const videoParent = document.getElementById(`video-${currentView + index}`).parentNode;
+                    videoParent.style.display = "none";
+                } catch (error){
+                    console.log(`skipping video-${currentView + index}`);
+                }
+            }
+            currentView = currentView + 4;
+            left.style.display = "block";
+        }
+        if (remoteProxy.size - currentView < 5){
+            right.style.display = "none";
+        }
+    })
 })
 
 window.addEventListener(`phx:offer`, async message => {
@@ -229,13 +313,16 @@ window.addEventListener(`phx:offer`, async message => {
     }
 })
 
-window.addEventListener(`phx:participants`, (message) => {
-    alert("participants")
-    console.log(message)
-})
+// window.addEventListener(`phx:participants`, (message) => {
+//     alert("participants")
+//     console.log(message)
+// })
 
+// This event listener is needed for safely removing srcObj from client. 
 window.addEventListener(`phx:presence`, (message) => {
-    console.log(message)
+    // console.log(message)
+    delete remoteProxy[message.detail.user]
+    remoteProxy.size -= 1;
     const confirmation = {"ref": message.detail.ref, "user": message.detail.user};
     document.dispatchEvent(room_event("presence-client", confirmation)); 
 })
@@ -243,31 +330,187 @@ window.addEventListener(`phx:presence`, (message) => {
 let room_event = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });
-
-async function makeCall(id) {
-    const peerConnection = new RTCPeerConnection(configuration);
-    window.addEventListener(`phx:response`, async msg => {
-        if (!remoteStreams[msg.id]) {
-            const remoteDesc = new RTCSessionDescription(msg.answer);
-            await peerConnection.setRemoteDescription(remoteDesc);
-            remoteStreams[msg.id] = msg.answer;
+function setVideoStream(stream, streamsHash) {
+    for (key of Object.keys(remoteProxy)){
+        if (remoteProxy[key].hasOwnProperty('hash') && remoteProxy[key].hash == streamsHash){
+            const videoHandler = document.getElementById(`video-${remoteProxy[key].stamp}`);
+            videoHandler.srcObject = stream;
+            return true;
         }
+    } 
+    return false;
+}
+
+
+
+function answerPeer(peer) {
+    let peerConnection = new RTCPeerConnection(configuration);
+    // console.log("PEER!")
+    // console.log(peer)
+    const streamsHash = (+new Date).toString(36).slice(-7);
+    let size = (Object.hasOwnProperty.call(remoteProxy, peer["id"]) && remoteProxy[peer["id"]].stamp) || remoteProxy.size + 1;
+    remoteProxy[peer["id"]] = {pc: peerConnection, dc: peerConnection.dc, hash: streamsHash, stamp: size};
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    peerConnection.ontrack = e => {
+        let isStreaming = setVideoStream(e.streams[0], streamsHash);
+        if (!isStreaming){
+            setTimeout(setVideoStream, 15000);
+        }
+        e.streams[0].onaddtrack = e => {}
+        e.streams[0].onremovetrack = e => {}
+    }
+    peerConnection.onicecandidate = e => {
+        // console.log("answer on ice candidate")
+        if (e.candidate) {
+            if (peerConnection.dc?.readyState == 'open') {
+                // console.log("CANDIDATE!!!")
+                dc.send(e.candidate)
+            }
+        }
+    }
+    peerConnection.ondatachannel = (event) => {
+        peerConnection.dc = event.channel;
+        peerConnection.dc.onopen = (event) => {
+            peerConnection.dc.send('Hi back!');
+            
+            // remoteProxy.size += 1;
+            createOffer();
+        }
+        peerConnection.dc.onmessage = (event) => {
+            // console.log(.)+
+            if (event.iceCandidate) {
+                try {
+                    peerConnection.addIceCandidate(event.iceCandidate).then("added ice candidate");
+                } catch (e) {
+                    console.error('Error adding received ice candidate', e);
+                }
+            }
+        }
+    }
+    
+    peerConnection.addEventListener("icegatheringstatechange", (ev) => {
+        switch(peerConnection.iceGatheringState) {
+          case "new":
+            /* gathering is either just starting or has been reset */
+            break;
+          case "gathering":
+            /* gathering has begun or is ongoing */
+            break;
+          case "complete":
+            /* gathering has ended */
+            console.log("complete state!")
+            
+            break;
+        }
+    });
+    peerConnection.onnegotiationneeded = e => {
+        // console.log("NEGOTIATION NEEDED!")
+    }
+    peerConnection.setRemoteDescription({sdp:peer.sdp,type: peer.type}).then(a => {})
+    peerConnection.createAnswer().then(a => peerConnection.setLocalDescription(a)).then(a => {
+        // console.log("answer created");
+        setTimeout(() => {
+            const iceresponse = {"id": peer.id, "pc":peerConnection.localDescription, from: id, hash: peer.hash};
+            document.dispatchEvent(room_event("icecandidate-response", iceresponse))
+        }, 0);
+        
     })
+
+}
+
+function createOffer() {
+    const streamsHash = (+new Date).toString(36).slice(-7);
+    let peerConnection = new RTCPeerConnection(configuration);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     peerConnection.ontrack = e => {
         console.log("trackssssss on creator")
         console.log(e.streams)
-        e.streams[0].onaddtrack = e => console.log("add track...")
-        e.streams[0].onremovetrack = e => console.log("remove track...")
-        //remoteStreams = e.streams[0];
+        e.streams[0].onaddtrack = e => {}
+        e.streams[0].onremovetrack = e => {}
+        let isStreaming = setVideoStream(e.streams[0], streamsHash);
+        if (!isStreaming){
+            setTimeout(setVideoStream, 15000);
+        }
     }
-    let dc = peerConnection.createDataChannel("channel");
-    dc.onmessage = e => {
-        messages(e)
-    };
-    peerConnection.onnegotiationneeded = e => console.log("negotiation needed")
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-    const iceoffer = {"id":id, "pc": peerConnection.localDescription};
-    document.dispatchEvent(room_event("icecandidate", iceoffer)); 
+
+    const dc = peerConnection.createDataChannel("chat");
+    dc.onopen = (event) => {
+        dc.send('Hi you!');
+    }
+    dc.onmessage = (event) => {
+        if (event.iceCandidate) {
+            try {
+                peerConnection.addIceCandidate(event.iceCandidate).then("added ice candidate");
+            } catch (e) {
+                console.error('Error adding received ice candidate', e);
+            }
+        }
+    }
+    
+    peerConnection.onicecandidate = e => {
+        // const iceoffer = {"id":id, "pc": peerConnection.localDescription};
+        // document.dispatchEvent(room_event("icecandidate", iceoffer));
+        if (e.candidate) {
+            if (dc?.readyState == 'open') {
+                // console.log("CANDIDATE!!!")
+                dc.send(e.candidate)
+            }
+        }
+     }
+    // window.addEventListener(`phx:new-ice`)
+    
+    peerConnection.createOffer().then( o => 
+        peerConnection.setLocalDescription(o)    
+    ).then(p => {
+        // console.log("set succesfully") 
+    })
+    peerConnection.addEventListener("icegatheringstatechange", (ev) => {
+        switch(peerConnection.iceGatheringState) {
+          case "new":
+            /* gathering is either just starting or has been reset */
+            break;
+          case "gathering":
+            /* gathering has begun or is ongoing */
+            break;
+          case "complete":
+            /* gathering has ended */
+            // console.log("complete state!")
+            const iceoffer = {id:id, pc: peerConnection.localDescription, hash: streamsHash};
+            document.dispatchEvent(room_event("icecandidate", iceoffer)); 
+            break;
+        }
+    });
+    peerConnection.onnegotiationneeded = e => {
+        setTimeout(() => {
+            const iceoffer = {id:id, pc: peerConnection.localDescription, hash: streamsHash};
+            document.dispatchEvent(room_event("icecandidate", iceoffer)); 
+        }, 500);
+    }
+    window.addEventListener(`phx:response`, async msg => {
+        if (msg.detail.hash === streamsHash) {
+            // console.log("PHX: RESPONSE")
+            // console.log(msg)
+            peerConnection.setRemoteDescription(msg.detail.pc);
+            console.log("PHX RESPONSE")
+            console.log(remoteProxy)
+            let size = (Object.hasOwnProperty.call(remoteProxy, msg.detail.from) && remoteProxy[msg.detail.from].stamp) || remoteProxy.size + 1;
+            remoteProxy[msg.detail.from] = {pc: peerConnection, dc: dc, hash: streamsHash, stamp: size};
+            dc.onopen = e => {}
+            createOffer();
+        }
+    })
+    // console.log( "estado " + dc.readyState)
 }
+
+// async function createOffer() {
+//     const peerConnection = new RTCPeerConnection(configuration);
+//     signalingChannel.addEventListener('message', async message => {
+//         if (message.answer) {
+//             const remoteDesc = new RTCSessionDescription(message.answer);
+//             await peerConnection.setRemoteDescription(remoteDesc);
+//         }
+//     });
+//     const offer = await peerConnection.createOffer();
+//     await peerConnection.setLocalDescription(offer);
+//     signalingChannel.send({'offer': offer});
+// }
