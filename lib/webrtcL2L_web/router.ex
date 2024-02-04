@@ -21,6 +21,7 @@ defmodule WebrtcL2LWeb.Router do
     get "/teste", PageController, :teste
 
     live "/room", Room
+    live "/test", Test
   end
 
   # Other scopes may use custom stacks.
