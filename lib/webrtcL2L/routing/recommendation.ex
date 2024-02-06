@@ -8,7 +8,7 @@ defmodule WebrtcL2L.Routing.Recommendation do
   @spec update_viewer_connections(Graph.t(), [%{source: String.t(), target: String.t(), weight: pos_integer()|pos_integer()}]) :: Graph.t()
   def update_viewer_connections(graph, new_values) do
     Enum.reduce(new_values, graph, fn %{source: streamer, target: viewer, weight: weight}, graph ->
-      case  Graph.update_edge(graph, streamer, viewer, weight: weight) do
+      case Graph.update_edge(graph, streamer, viewer, weight: weight) do
         {:error, :no_such_edge} ->
           graph
         graph ->
@@ -46,8 +46,9 @@ defmodule WebrtcL2L.Routing.Recommendation do
       {:ok, graph, "watcher2"}
 
   """
-  @spec join_viewer(Graph.t(), String.t(), String.t(),[{String.t(), pos_integer()|pos_integer()}]) :: {:ok|:missing_streamer,Graph.t(), String.t()|nil}
-  def join_viewer(graph, _source, _viewer, []), do: {:missing_streamer, graph, nil}
+  @spec join_viewer(Graph.t(), String.t(), String.t(),[{String.t(), pos_integer()|pos_integer()}]) :: {:ok|:missing_streamer,Graph.t(), String.t()|[]}
+  def join_viewer(nil, _source, _viewer, _), do: {:missing_streamer, nil, []}
+  def join_viewer(graph, _source, _viewer, []), do: {:missing_streamer, graph, []}
   def join_viewer(graph, source, viewer, weights) do
     with current_vertices <- Graph.vertices(graph),
           {:ok, current_vertices} <- _validate_if_viewer_is_present(current_vertices, viewer),
@@ -55,7 +56,7 @@ defmodule WebrtcL2L.Routing.Recommendation do
             _get_streamer(graph, source, vertices, viewer)
           else
             {:missing_streamer, graph, vertices} -> {:missing_streamer, graph, vertices}
-            {:already_consuming, _current_vertices} -> {:missing_streamer, graph, nil}
+            {:already_consuming, _current_vertices} -> {:missing_streamer, graph, []}
     end
   end
   defp _validate_if_viewer_is_present(current_vertices, viewer) do
