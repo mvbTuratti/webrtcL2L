@@ -110,5 +110,12 @@ defmodule WebrtcL2LWeb.RecommendationTest do
       {graph, affected_viewers} = Recommendation.remove_viewer(state[:graph], "maria")
       assert affected_viewers == ["flavio"]
     end
+    test "removing a streamer should delete all nested dependencies and return who's affected", state do
+      graph = state[:graph]
+        |> Graph.add_edge(Graph.Edge.new("flavio", "rodolfo", weight: 1))
+      {graph, affected_viewers} = Recommendation.remove_viewer(graph, "maria")
+      assert affected_viewers |> Enum.sort() == ["flavio", "rodolfo"]
+      assert ["joao"] == Graph.vertices(graph)
+    end
   end
 end

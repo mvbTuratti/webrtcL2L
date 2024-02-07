@@ -77,5 +77,40 @@ defmodule WebrtcL2LWeb.RoutingTest do
       assert recommendation == "fulano"
       assert status == :ok
     end
+    test "users gets a complex recommendation when joining stream", state do
+      state[:room]
+        |> Routing.upsert_connection_quality([%{source: "a", target: "b", weight: 10},
+          %{source: "a", target: "c", weight: 1},
+          %{source: "c", target: "e", weight: 2},
+          %{source: "a", target: "f", weight: 8},
+          %{source: "e", target: "b", weight: 1}])
+        |> Routing.create_stream(:high_quality, "a")
+      c_r = state[:room] |> Routing.join_stream(:high_quality,"a", "c")
+      e_r = state[:room] |> Routing.join_stream(:high_quality,"a", "e")
+      f_r = state[:room] |> Routing.join_stream(:high_quality,"a", "f")
+      b_r = state[:room] |> Routing.join_stream(:high_quality,"a", "b")
+      assert {:ok, "a"} = c_r
+      assert {:ok, "c"} = e_r
+      assert {:ok, "a"} = f_r
+      assert {:ok, "e"} = b_r
+    end
+  end
+  describe "leave_stream/2" do
+    setup do
+      {:ok, room_pid} = Routing.start_link([])
+      base_connections = [%{source: "fulano", target: "ciclano", weight: 1},
+                          %{source: "ciclano", target: "beltrano", weight: 2},
+                          %{source: "beltrano", target: "fulano", weight: 1},
+                         %{source: "fulano", target: "beltrano", weight: 10}]
+      Routing.upsert_connection_quality(room_pid, base_connections)
+        |> Routing.create_stream(:high_quality, "fulano")
+        |> Routing.join_stream(:high_quality,"fulano", "ciclano")
+        |> Routing.join_stream(:high_quality,"fulano", "beltrano")
+      {:ok, room: room_pid}
+    end
+    test "when user leaves, all of its children should be added with new direct streamers", state do
+      # IO.inspect()
+      assert ["ciclano"] == Graph.in_edges(state[:room][:high_quality]["fulano"], "beltrano")
+    end
   end
 end

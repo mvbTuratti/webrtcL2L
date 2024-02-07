@@ -30,10 +30,21 @@ defmodule WebrtcL2L.Routing.Recommendation do
   """
   @spec remove_viewer(Graph.t(), String.t()) :: {Graph.t(), [String.t()]}
   def remove_viewer(graph, viewer) do
-    affected_viewers = Graph.out_edges(graph, viewer) |> Enum.map(fn %{v2: affected_viewer} -> affected_viewer end)
-    graph = Graph.delete_vertex(graph, viewer)
+    affected_viewers = get_all_affected_viewers([viewer], [], graph)
+    graph = remove_all_affected_viewers(graph, [viewer | affected_viewers])
     {graph, affected_viewers}
   end
+  defp remove_all_affected_viewers(graph, list_of_viewers) do
+    Enum.reduce(list_of_viewers, graph, fn (viewer, graph) ->
+      Graph.delete_vertex(graph, viewer)
+    end)
+  end
+  defp get_all_affected_viewers([], affected_viewers, _), do: affected_viewers
+  defp get_all_affected_viewers([viewer | nested_watchers], affected_viewers, graph) do
+    direct_outgoing_watchers = Graph.out_edges(graph, viewer) |> Enum.map(fn %{v2: affected_viewer} -> affected_viewer end)
+    get_all_affected_viewers(direct_outgoing_watchers ++ nested_watchers, direct_outgoing_watchers ++ affected_viewers, graph)
+  end
+
   @doc """
   Adds a viewer to a stream, it expects the current graph, the root and the new viewer and a list of weights between the
   new viewer and all available connections in tuples where the first value is the name of the source and the second value
