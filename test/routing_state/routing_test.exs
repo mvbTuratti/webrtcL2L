@@ -102,15 +102,22 @@ defmodule WebrtcL2LWeb.RoutingTest do
                           %{source: "ciclano", target: "beltrano", weight: 2},
                           %{source: "beltrano", target: "fulano", weight: 1},
                          %{source: "fulano", target: "beltrano", weight: 10}]
-      Routing.upsert_connection_quality(room_pid, base_connections)
-        |> Routing.create_stream(:high_quality, "fulano")
-        |> Routing.join_stream(:high_quality,"fulano", "ciclano")
-        |> Routing.join_stream(:high_quality,"fulano", "beltrano")
+      room_pid = Routing.upsert_connection_quality(room_pid, base_connections)
+                |> Routing.create_stream(:high_quality, "fulano")
+
+      _ = Routing.join_stream(room_pid, :high_quality,"fulano", "ciclano")
+      _ = Routing.join_stream(room_pid, :high_quality,"fulano", "beltrano")
       {:ok, room: room_pid}
     end
     test "when user leaves, all of its children should be added with new direct streamers", state do
-      # IO.inspect()
-      assert ["ciclano"] == Graph.in_edges(state[:room][:high_quality]["fulano"], "beltrano")
+      graph = :sys.get_state(state[:room])
+      assert [%{v1: "ciclano"}] = Graph.in_edges(graph[:high_quality]["fulano"], "beltrano")
+      assert {:ok, [{:ok, "beltrano", "fulano"}]} = Routing.leave_stream(state[:room],:high_quality,"fulano", "ciclano")
+    end
+    test "code should correctly point out when there's no option for children of absent parent", state do
+      room_pid = Routing.upsert_connection_quality(state[:room], [%{source: "ciclano", target: "zeze", weight: 1}])
+      assert {:ok, "ciclano"} = Routing.join_stream(room_pid, :high_quality,"fulano","zeze")
+      assert {:ok, [{:missing_streamer, "zeze", "fulano"}, {:ok, "beltrano", "fulano"}]} = Routing.leave_stream(room_pid, :high_quality, "fulano", "ciclano")
     end
   end
 end
