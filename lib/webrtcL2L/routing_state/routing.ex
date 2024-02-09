@@ -2,7 +2,7 @@ defmodule WebrtcL2L.RoutingState.Routing do
   use GenServer, restart: :transient
   alias WebrtcL2L.Routing.Recommendation
 
-  @timeout 10_000
+  @timeout 600_000
 
   def start_link(options) do
     # [name: {:via, Registry, {WebrtcL2L.RouterRegistry, name}}] = options

@@ -1,4 +1,5 @@
 defmodule WebrtcL2LWeb.Router do
+  # alias WebrtcL2LWeb.Conference
   use WebrtcL2LWeb, :router
 
   pipeline :browser do
@@ -18,10 +19,9 @@ defmodule WebrtcL2LWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :index
-    get "/teste", PageController, :teste
 
     live "/room", Room
-    live "/test", Test
+    live "/conference", Conference
   end
 
   # Other scopes may use custom stacks.
