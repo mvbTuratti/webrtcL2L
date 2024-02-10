@@ -10,7 +10,6 @@ defmodule PerfectNegotiation.PerfectNegotiationTest do
     end
     test "should be able to update values", state do
       [h | t] = state[:participants]
-      # PerfectNegotiation.add_routing_values_to_member(state[:user], h, "user", "zeze")
       assert %{"user" => %{"zeze" => %{high_quality: "1", low_quality: "1", audio_only: "1"}}} =
         PerfectNegotiation.upsert_routing_values_to_member(state[:sdp_state], h, "user", "zeze")
     end
@@ -109,6 +108,60 @@ defmodule PerfectNegotiation.PerfectNegotiationTest do
     test "update value for non-existing streamer member should insert value", state do
       assert %{"user1" => %{"zeze1" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: ""}}, "user" => %{}} =
         PerfectNegotiation.upsert_low_quality_value(state.sdp_state, "user1", "zeze1", "2")
+    end
+  end
+  describe "get_high_quality_sdp_value/3" do
+    setup do
+      negotiation_values = create_two_participants()
+      state = for participant <- negotiation_values, reduce: %{} do
+        acc -> PerfectNegotiation.upsert_routing_values_to_member(acc, participant, "user", "zeze#{participant.high_quality}")
+      end
+      {:ok, %{sdp_state: state, participants: negotiation_values}}
+    end
+    test "retrieve successfully value from existing member", state do
+      assert {:ok, "2"} = PerfectNegotiation.get_high_quality_sdp_value(state.sdp_state, "user", "zeze2")
+    end
+    test "return error message when routee does not exists", state do
+      assert {:missing_value, ""} = PerfectNegotiation.get_high_quality_sdp_value(state.sdp_state, "user", "zeze3")
+    end
+    test "return error message when user does not exists", state do
+      assert {:missing_value, ""} = PerfectNegotiation.get_high_quality_sdp_value(state.sdp_state, "user1", "zeze3")
+    end
+  end
+  describe "get_low_quality_sdp_value/3" do
+    setup do
+      negotiation_values = create_two_participants()
+      state = for participant <- negotiation_values, reduce: %{} do
+        acc -> PerfectNegotiation.upsert_routing_values_to_member(acc, participant, "user", "zeze#{participant.low_quality}")
+      end
+      {:ok, %{sdp_state: state, participants: negotiation_values}}
+    end
+    test "retrieve successfully value from existing member", state do
+      assert {:ok, "2"} = PerfectNegotiation.get_low_quality_sdp_value(state.sdp_state, "user", "zeze2")
+    end
+    test "return error message when routee does not exists", state do
+      assert {:missing_value, ""} = PerfectNegotiation.get_low_quality_sdp_value(state.sdp_state, "user", "zeze3")
+    end
+    test "return error message when user does not exists", state do
+      assert {:missing_value, ""} = PerfectNegotiation.get_low_quality_sdp_value(state.sdp_state, "user1", "zeze3")
+    end
+  end
+  describe "get_audio_sdp_value/3" do
+    setup do
+      negotiation_values = create_two_participants()
+      state = for participant <- negotiation_values, reduce: %{} do
+        acc -> PerfectNegotiation.upsert_routing_values_to_member(acc, participant, "user", "zeze#{participant.audio_only}")
+      end
+      {:ok, %{sdp_state: state, participants: negotiation_values}}
+    end
+    test "retrieve successfully value from existing member", state do
+      assert {:ok, "2"} = PerfectNegotiation.get_audio_sdp_value(state.sdp_state, "user", "zeze2")
+    end
+    test "return error message when routee does not exists", state do
+      assert {:missing_value, ""} = PerfectNegotiation.get_audio_sdp_value(state.sdp_state, "user", "zeze3")
+    end
+    test "return error message when user does not exists", state do
+      assert {:missing_value, ""} = PerfectNegotiation.get_audio_sdp_value(state.sdp_state, "user1", "zeze3")
     end
   end
 

@@ -26,16 +26,36 @@ defmodule WebrtcL2L.SdpTable.PerfectNegotiation do
         upsert_routing_values_to_member(current_sdp_state, fun_update.(participant_media, sdp_string_value), user, routee)
     end
   end
+  @spec upsert_audio_only_value(%{}, String.t(), String.t(), String.t()) :: %{}
   def upsert_audio_only_value(current_sdp_state, user, routee, sdp_string_value) do
     new_participant_media = %ParticipantMedia{audio_only: sdp_string_value}
     _upsert_sdp_value(&ParticipantMedia.set_audio_value/2, new_participant_media, current_sdp_state, user, routee, sdp_string_value)
   end
+  @spec upsert_high_quality_value(%{}, String.t(), String.t(), String.t()) :: %{}
   def upsert_high_quality_value(current_sdp_state, user, routee, sdp_string_value) do
     new_participant_media = %ParticipantMedia{high_quality: sdp_string_value}
     _upsert_sdp_value(&ParticipantMedia.set_high_quality_value/2, new_participant_media, current_sdp_state, user, routee, sdp_string_value)
   end
+  @spec upsert_low_quality_value(%{}, String.t(), String.t(), String.t()) :: %{}
   def upsert_low_quality_value(current_sdp_state, user, routee, sdp_string_value) do
     new_participant_media = %ParticipantMedia{low_quality: sdp_string_value}
     _upsert_sdp_value(&ParticipantMedia.set_low_quality_value/2, new_participant_media, current_sdp_state, user, routee, sdp_string_value)
   end
+  def _get_sdp_value(current_sdp_state, user, routee, type_of_stream) do
+    value = Map.get(current_sdp_state, user, %{})
+      |> Map.get(routee, %ParticipantMedia{})
+      |> Map.get(type_of_stream)
+    case value do
+      "" ->
+        {:missing_value, value}
+      _ ->
+        {:ok, value}
+    end
+  end
+  @spec get_high_quality_sdp_value(%{}, String.t(), String.t()) :: {:ok, String.t()} | {:missing_value, String.t()}
+  def get_high_quality_sdp_value(current_sdp_state, user, routee), do: _get_sdp_value(current_sdp_state, user, routee, :high_quality)
+  @spec get_low_quality_sdp_value(%{}, String.t(), String.t()) :: {:ok, String.t()} | {:missing_value, String.t()}
+  def get_low_quality_sdp_value(current_sdp_state, user, routee), do: _get_sdp_value(current_sdp_state, user, routee, :low_quality)
+  @spec get_audio_sdp_value(%{}, String.t(), String.t()) :: {:ok, String.t()} | {:missing_value, String.t()}
+  def get_audio_sdp_value(current_sdp_state, user, routee), do: _get_sdp_value(current_sdp_state, user, routee, :audio_only)
 end
