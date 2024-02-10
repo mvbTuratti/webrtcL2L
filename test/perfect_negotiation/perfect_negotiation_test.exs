@@ -45,6 +45,72 @@ defmodule PerfectNegotiation.PerfectNegotiationTest do
       assert state.sdp_state == PerfectNegotiation.remove_routing_values_to_member(state.sdp_state, "user1", "user2")
     end
   end
+  describe "upsert_audio_only_value/4" do
+    setup do
+      negotiation_values = create_two_participants()
+      state = for participant <- negotiation_values, reduce: %{} do
+        acc -> PerfectNegotiation.upsert_routing_values_to_member(acc, participant, "user", "zeze#{participant.high_quality}")
+      end
+      {:ok, %{sdp_state: state, participants: negotiation_values}}
+    end
+    test "requesting update should update the value and keep the remainder", state do
+      [h | _] = state[:participants]
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", low_quality: "2", audio_only: "3"}}} ==
+        PerfectNegotiation.upsert_audio_only_value(state[:sdp_state], "user", "zeze2", "3")
+    end
+    test "update value for non-existing routee member should insert value", state do
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{audio_only: "2", high_quality: "", low_quality: ""}}} =
+        PerfectNegotiation.upsert_audio_only_value(state.sdp_state, "user", "zeze3", "2")
+    end
+    test "update value for non-existing streamer member should insert value", state do
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{audio_only: "2", high_quality: "", low_quality: ""}}, "user" => %{}} =
+        PerfectNegotiation.upsert_audio_only_value(state.sdp_state, "user1", "zeze1", "2")
+    end
+  end
+  describe "upsert_high_quality_value/4" do
+    setup do
+      negotiation_values = create_two_participants()
+      state = for participant <- negotiation_values, reduce: %{} do
+        acc -> PerfectNegotiation.upsert_routing_values_to_member(acc, participant, "user", "zeze#{participant.high_quality}")
+      end
+      {:ok, %{sdp_state: state, participants: negotiation_values}}
+    end
+    test "requesting update should update the value and keep the remainder", state do
+      [h | _] = state[:participants]
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "3", low_quality: "2", audio_only: "2"}}} ==
+        PerfectNegotiation.upsert_high_quality_value(state[:sdp_state], "user", "zeze2", "3")
+    end
+    test "update value for non-existing routee member should insert value", state do
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{audio_only: "", high_quality: "2", low_quality: ""}}} =
+        PerfectNegotiation.upsert_high_quality_value(state.sdp_state, "user", "zeze3", "2")
+    end
+    test "update value for non-existing streamer member should insert value", state do
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{audio_only: "", high_quality: "2", low_quality: ""}}, "user" => %{}} =
+        PerfectNegotiation.upsert_high_quality_value(state.sdp_state, "user1", "zeze1", "2")
+    end
+  end
+  describe "upsert_low_quality_value/4" do
+    setup do
+      negotiation_values = create_two_participants()
+      state = for participant <- negotiation_values, reduce: %{} do
+        acc -> PerfectNegotiation.upsert_routing_values_to_member(acc, participant, "user", "zeze#{participant.high_quality}")
+      end
+      {:ok, %{sdp_state: state, participants: negotiation_values}}
+    end
+    test "requesting update should update the value and keep the remainder", state do
+      [h | _] = state[:participants]
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", audio_only: "2", low_quality: "3"}}} ==
+        PerfectNegotiation.upsert_low_quality_value(state[:sdp_state], "user", "zeze2", "3")
+    end
+    test "update value for non-existing routee member should insert value", state do
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: ""}}} =
+        PerfectNegotiation.upsert_low_quality_value(state.sdp_state, "user", "zeze3", "2")
+    end
+    test "update value for non-existing streamer member should insert value", state do
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: ""}}, "user" => %{}} =
+        PerfectNegotiation.upsert_low_quality_value(state.sdp_state, "user1", "zeze1", "2")
+    end
+  end
 
   def create_two_participants() do
     Enum.map(1..2, fn iteration ->
