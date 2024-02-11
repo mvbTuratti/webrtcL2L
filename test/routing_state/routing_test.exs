@@ -17,7 +17,7 @@ defmodule WebrtcL2LWeb.RoutingTest do
     end
     test "adding new member to an stream without having established a connection results in error", state do
       _result = Routing.create_stream(state[:room], :high_quality, "fulano")
-      assert {:missing_streamer, []} = Routing.join_stream(state[:room], "fulano", "ciclano")
+      assert {:missing_streamer, _} = Routing.join_stream(state[:room], :high_quality, "fulano", "ciclano")
     end
     test "create all possible stream types", state do
       _result = Routing.create_stream(state[:room], :high_quality, "fulano")

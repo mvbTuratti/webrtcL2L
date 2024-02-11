@@ -1,4 +1,4 @@
-defmodule PerfectNegotiation.PerfectNegotiationTest do
+defmodule SdpTable.PerfectNegotiation.PerfectNegotiationTest do
   use WebrtcL2LWeb.ConnCase, async: true
   alias WebrtcL2L.SdpTable.ParticipantMedia
   alias WebrtcL2L.SdpTable.PerfectNegotiation

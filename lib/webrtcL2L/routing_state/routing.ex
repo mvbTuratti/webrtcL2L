@@ -33,7 +33,7 @@ defmodule WebrtcL2L.RoutingState.Routing do
       Map.get(current_state[stream_type], streamer)
       |> Recommendation.join_viewer(streamer, viewer, incoming_references)
     case status do
-      :missing_streamer -> {:reply, {:missing_streamer, nil}, current_state, @timeout}
+      :missing_streamer -> {:reply, {:missing_streamer, []}, current_state, @timeout}
       :ok ->
         current_state = Kernel.put_in(current_state, [stream_type, streamer], graph)
         {:reply, {status, recommendation}, current_state, @timeout}
@@ -94,9 +94,4 @@ defmodule WebrtcL2L.RoutingState.Routing do
   @spec leave_stream(pid(), :high_quality|:low_quality, String.t(), String.t()) :: {:ok, [{:ok, String.t(), String.t()}|{:missing_parent, String.t(), String.t()}]}
   def leave_stream(pid, :high_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :high_quality, streamer, viewer})
   def leave_stream(pid, :low_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :low_quality, streamer, viewer})
-  # @impl true
-  # def handle_cast({:info, _source}, router) do
-  #   # IO.inspect(source)
-  #   {:noreply, router, @timeout}
-  # end
 end
