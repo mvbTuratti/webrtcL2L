@@ -47,6 +47,15 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   def upsert_perfect_negotiation_of_audio_only_stream(pid, streamer, routee, sdp_string_value) do
     GenServer.cast(pid, {:create_sdp_channel, &PerfectNegotiation.upsert_audio_only_value/4, streamer, routee,sdp_string_value})
   end
+  @spec upsert_perfect_negotiation_of_screen_sharing_stream(pid(), String.t(), String.t(), String.t()) :: :ok
+  def upsert_perfect_negotiation_of_screen_sharing_stream(pid, streamer, routee, sdp_string_value) do
+    GenServer.cast(pid, {:create_sdp_channel, &PerfectNegotiation.upsert_screen_sharing_value/4, streamer, routee,sdp_string_value})
+  end
+
+  @spec get_perfect_negotiation_of_screen_sharing_stream(pid(), String.t(), String.t()) :: {:ok, String.t} | {:missing_value, String.t}
+  def get_perfect_negotiation_of_screen_sharing_stream(pid, streamer, routee) do
+    GenServer.call(pid, {:get_sdp_channel, &PerfectNegotiation.get_screen_sharing_sdp_value/3, streamer, routee})
+  end
   @spec get_perfect_negotiation_of_high_quality_stream(pid(), String.t(), String.t()) :: {:ok, String.t} | {:missing_value, String.t}
   def get_perfect_negotiation_of_high_quality_stream(pid, streamer, routee) do
     GenServer.call(pid, {:get_sdp_channel, &PerfectNegotiation.get_high_quality_sdp_value/3, streamer, routee})
@@ -59,4 +68,5 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   def get_perfect_negotiation_of_audio_only_stream(pid, streamer, routee) do
     GenServer.call(pid, {:get_sdp_channel, &PerfectNegotiation.get_audio_sdp_value/3, streamer, routee})
   end
+
 end

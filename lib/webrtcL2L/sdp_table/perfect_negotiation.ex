@@ -26,6 +26,11 @@ defmodule WebrtcL2L.SdpTable.PerfectNegotiation do
         upsert_routing_values_to_member(current_sdp_state, fun_update.(participant_media, sdp_string_value), user, routee)
     end
   end
+  @spec upsert_screen_sharing_value(%{}, String.t(), String.t(), String.t()) :: %{}
+  def upsert_screen_sharing_value(current_sdp_state, user, routee, sdp_string_value) do
+    new_participant_media = %ParticipantMedia{screen_sharing: sdp_string_value}
+    _upsert_sdp_value(&ParticipantMedia.set_screen_sharing_value/2, new_participant_media, current_sdp_state, user, routee, sdp_string_value)
+  end
   @spec upsert_audio_only_value(%{}, String.t(), String.t(), String.t()) :: %{}
   def upsert_audio_only_value(current_sdp_state, user, routee, sdp_string_value) do
     new_participant_media = %ParticipantMedia{audio_only: sdp_string_value}
@@ -52,6 +57,8 @@ defmodule WebrtcL2L.SdpTable.PerfectNegotiation do
         {:ok, value}
     end
   end
+  @spec get_screen_sharing_sdp_value(%{}, String.t(), String.t()) :: {:ok, String.t()} | {:missing_value, String.t()}
+  def get_screen_sharing_sdp_value(current_sdp_state, user, routee), do: _get_sdp_value(current_sdp_state, user, routee, :screen_sharing)
   @spec get_high_quality_sdp_value(%{}, String.t(), String.t()) :: {:ok, String.t()} | {:missing_value, String.t()}
   def get_high_quality_sdp_value(current_sdp_state, user, routee), do: _get_sdp_value(current_sdp_state, user, routee, :high_quality)
   @spec get_low_quality_sdp_value(%{}, String.t(), String.t()) :: {:ok, String.t()} | {:missing_value, String.t()}
