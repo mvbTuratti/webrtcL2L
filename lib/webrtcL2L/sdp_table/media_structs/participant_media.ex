@@ -1,5 +1,5 @@
-defmodule WebrtcL2L.SdpTable.ParticipantMedia do
-  alias WebrtcL2L.SdpTable.ParticipantMedia
+defmodule WebrtcL2L.SdpTable.MediaStructs.ParticipantMedia do
+  alias WebrtcL2L.SdpTable.MediaStructs.ParticipantMedia
   defstruct high_quality: "", low_quality: "", audio_only: "", screen_sharing: ""
 
   def set_high_quality_value(%ParticipantMedia{} = participant, sdp_value) do

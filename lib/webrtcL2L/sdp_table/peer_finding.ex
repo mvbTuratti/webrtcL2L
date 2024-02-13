@@ -1,6 +1,7 @@
 defmodule WebrtcL2L.SdpTable.PeerFinding do
   use GenServer, restart: :transient
   alias WebrtcL2L.SdpTable.PerfectNegotiation
+  alias WebrtcL2L.SdpTable.MediaStructs.DataChannel
 
 
   @timeout 600_000
@@ -17,12 +18,12 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   ## Examples
 
       iex> WebrtcL2L.SdpTable.PeerFinding.upsert_perfect_negotiation_of_high_quality_stream(pid, "streamer", "streamer", "sdp value")
-      %{"streamer" => %{"streamer" => %ParticipantMedia{high_quality: "sdp value", low_quality: "", audio_only: ""}}}
+      %{"streamer" => %{"streamer" => %ParticipantMedia{high_quality: "sdp value", low_quality: "", audio_only: "", screen_sharing: ""}}}
 
   """
   @impl true
   def init(_init_args) do
-    {:ok, %{}, @timeout}
+    {:ok, %{screen_sharing: "", data_channel: %{}}, @timeout}
   end
   # def upsert_high_quality_value(current_sdp_state, user, routee, sdp_string_value) do
   @impl true
@@ -33,6 +34,26 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   @impl true
   def handle_call({:get_sdp_channel, get_function, streamer, routee}, _, current_state) do
     {:reply, get_function.(current_state, streamer, routee), current_state, @timeout}
+  end
+  def handle_call({:update_sdp_data_channel, user, sdp_string_value}, _, current_state) do
+    case Map.get(current_state[:data_channel], user, nil) do
+      nil ->
+        current_state = Kernel.put_in(current_state, [:data_channel, user], %DataChannel{room: sdp_string_value})
+        {:reply, :ok, current_state, @timeout}
+      user_data_channel ->
+        new_state = Kernel.put_in(current_state, [:data_channel, user], DataChannel.set_room_value(user_data_channel, sdp_string_value))
+        {:reply, :ok, new_state, @timeout}
+    end
+  end
+  def handle_call({:join_room, new_member, sdp_string_value}, _, current_state) do
+    {current_state, users_sdp, affected_users} =
+      Map.keys(current_state[:data_channel])
+      |> Enum.reduce({current_state, [], []}, fn user_name, {current_state, users_sdps, current_users} ->
+        {:ok, user_data_channel, sdp_value} = DataChannel.user_joining(current_state[:data_channel][user_name], new_member)
+        {Kernel.put_in(current_state, [:data_channel, user_name], user_data_channel), [{user_name, sdp_value} | users_sdps], [user_name | current_users]}
+      end)
+    current_state = Kernel.put_in(current_state, [:data_channel, new_member], %DataChannel{room: sdp_string_value}) #set PN for user
+    {:reply, {:ok, users_sdp, affected_users}, current_state, @timeout}
   end
 
   @spec upsert_perfect_negotiation_of_high_quality_stream(pid(), String.t(), String.t(), String.t()) :: :ok
@@ -51,7 +72,14 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   def upsert_perfect_negotiation_of_screen_sharing_stream(pid, streamer, routee, sdp_string_value) do
     GenServer.cast(pid, {:create_sdp_channel, &PerfectNegotiation.upsert_screen_sharing_value/4, streamer, routee,sdp_string_value})
   end
-
+  @spec upsert_perfect_negotiation_of_data_channel_stream(pid(), String.t(), String.t(), String.t()) :: :ok
+  def upsert_perfect_negotiation_of_data_channel_stream(pid, streamer, routee, sdp_string_value) do
+    GenServer.cast(pid, {:create_sdp_data_channel, streamer, routee,sdp_string_value})
+  end
+  @spec get_perfect_negotiation_of_data_channel_stream(pid(), String.t(), String.t()) :: {:ok, String.t} | {:missing_value, String.t}
+  def get_perfect_negotiation_of_data_channel_stream(pid, streamer, routee) do
+    GenServer.call(pid, {:get_sdp_data_channel, streamer, routee})
+  end
   @spec get_perfect_negotiation_of_screen_sharing_stream(pid(), String.t(), String.t()) :: {:ok, String.t} | {:missing_value, String.t}
   def get_perfect_negotiation_of_screen_sharing_stream(pid, streamer, routee) do
     GenServer.call(pid, {:get_sdp_channel, &PerfectNegotiation.get_screen_sharing_sdp_value/3, streamer, routee})
@@ -68,5 +96,12 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   def get_perfect_negotiation_of_audio_only_stream(pid, streamer, routee) do
     GenServer.call(pid, {:get_sdp_channel, &PerfectNegotiation.get_audio_sdp_value/3, streamer, routee})
   end
+  @doc """
+    This function expects GenServer's PID, the user name and the user SDP value for a future data channel link.
+    Will respond with a tuple :ok as first parament, second a list of tuples where {Name, SDP Perfect Negotiation} and third value
+    is a list of affected users as to make calls to front-end in the future for setting up new Perfect Negotiation calls.
+  """
+  @spec join_call(pid(), String.t(), String.t()) :: {:ok, [{String.t(), String.t()}], [String.t()]}
+  def join_call(pid, streamer, sdp_value), do: GenServer.call(pid, {:join_room, streamer, sdp_value})
 
 end

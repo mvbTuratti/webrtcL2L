@@ -1,6 +1,7 @@
 defmodule SdpTable.PeerFinding.PeerFindingTest do
   use WebrtcL2LWeb.ConnCase, async: true
-  alias WebrtcL2L.SdpTable.{PeerFinding,ParticipantMedia}
+  alias WebrtcL2L.SdpTable.PeerFinding
+  alias WebrtcL2L.SdpTable.MediaStructs.ParticipantMedia
 
   describe "upsert_perfect_negotiation_of_high_quality_stream/4" do
     setup do

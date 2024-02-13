@@ -1,7 +1,7 @@
 defmodule SdpTable.PerfectNegotiation.PerfectNegotiationTest do
   use WebrtcL2LWeb.ConnCase, async: true
-  alias WebrtcL2L.SdpTable.ParticipantMedia
   alias WebrtcL2L.SdpTable.PerfectNegotiation
+  alias WebrtcL2L.SdpTable.MediaStructs.ParticipantMedia
 
   describe "add_routing_values_to_member/4" do
     setup do
@@ -54,15 +54,15 @@ defmodule SdpTable.PerfectNegotiation.PerfectNegotiationTest do
     end
     test "requesting update should update the value and keep the remainder", state do
       [h | _] = state[:participants]
-      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", low_quality: "2", audio_only: "3", screen_sharing: "2"}}} ==
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", low_quality: "2", audio_only: "3", screen_sharing: "2" }}} ==
         PerfectNegotiation.upsert_audio_only_value(state[:sdp_state], "user", "zeze2", "3")
     end
     test "update value for non-existing routee member should insert value", state do
-      assert %{"user" => %{"zeze3" => %ParticipantMedia{audio_only: "2", high_quality: "", low_quality: "", screen_sharing: ""}}} =
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{audio_only: "2", high_quality: "", low_quality: "", screen_sharing: "" }}} =
         PerfectNegotiation.upsert_audio_only_value(state.sdp_state, "user", "zeze3", "2")
     end
     test "update value for non-existing streamer member should insert value", state do
-      assert %{"user1" => %{"zeze1" => %ParticipantMedia{audio_only: "2", high_quality: "", low_quality: "", screen_sharing: ""}}, "user" => %{}} =
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{audio_only: "2", high_quality: "", low_quality: "", screen_sharing: "" }}, "user" => %{}} =
         PerfectNegotiation.upsert_audio_only_value(state.sdp_state, "user1", "zeze1", "2")
     end
   end
@@ -76,15 +76,15 @@ defmodule SdpTable.PerfectNegotiation.PerfectNegotiationTest do
     end
     test "requesting update should update the value and keep the remainder", state do
       [h | _] = state[:participants]
-      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "3", low_quality: "2", audio_only: "2", screen_sharing: "2"}}} ==
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "3", low_quality: "2", audio_only: "2", screen_sharing: "2" }}} ==
         PerfectNegotiation.upsert_high_quality_value(state[:sdp_state], "user", "zeze2", "3")
     end
     test "update value for non-existing routee member should insert value", state do
-      assert %{"user" => %{"zeze3" => %ParticipantMedia{audio_only: "", high_quality: "2", low_quality: "", screen_sharing: ""}}} =
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{audio_only: "", high_quality: "2", low_quality: "", screen_sharing: "" }}} =
         PerfectNegotiation.upsert_high_quality_value(state.sdp_state, "user", "zeze3", "2")
     end
     test "update value for non-existing streamer member should insert value", state do
-      assert %{"user1" => %{"zeze1" => %ParticipantMedia{audio_only: "", high_quality: "2", low_quality: "", screen_sharing: ""}}, "user" => %{}} =
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{audio_only: "", high_quality: "2", low_quality: "", screen_sharing: "" }}, "user" => %{}} =
         PerfectNegotiation.upsert_high_quality_value(state.sdp_state, "user1", "zeze1", "2")
     end
   end
@@ -98,15 +98,15 @@ defmodule SdpTable.PerfectNegotiation.PerfectNegotiationTest do
     end
     test "requesting update should update the value and keep the remainder", state do
       [h | _] = state[:participants]
-      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", audio_only: "2", low_quality: "3", screen_sharing: "2"}}} ==
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", audio_only: "2", low_quality: "3", screen_sharing: "2" }}} ==
         PerfectNegotiation.upsert_low_quality_value(state[:sdp_state], "user", "zeze2", "3")
     end
     test "update value for non-existing routee member should insert value", state do
-      assert %{"user" => %{"zeze3" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: "", screen_sharing: ""}}} =
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: "", screen_sharing: "" }}} =
         PerfectNegotiation.upsert_low_quality_value(state.sdp_state, "user", "zeze3", "2")
     end
     test "update value for non-existing streamer member should insert value", state do
-      assert %{"user1" => %{"zeze1" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: "", screen_sharing: ""}}, "user" => %{}} =
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{low_quality: "2", high_quality: "", audio_only: "", screen_sharing: "" }}, "user" => %{}} =
         PerfectNegotiation.upsert_low_quality_value(state.sdp_state, "user1", "zeze1", "2")
     end
   end
@@ -120,15 +120,15 @@ defmodule SdpTable.PerfectNegotiation.PerfectNegotiationTest do
     end
     test "requesting update should update the value and keep the remainder", state do
       [h | _] = state[:participants]
-      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", audio_only: "2", screen_sharing: "3", low_quality: "2"}}} ==
+      assert %{"user" => %{"zeze1" => h, "zeze2" => %ParticipantMedia{high_quality: "2", audio_only: "2", screen_sharing: "3", low_quality: "2" }}} ==
         PerfectNegotiation.upsert_screen_sharing_value(state[:sdp_state], "user", "zeze2", "3")
     end
     test "update value for non-existing routee member should insert value", state do
-      assert %{"user" => %{"zeze3" => %ParticipantMedia{screen_sharing: "2", high_quality: "", audio_only: "", low_quality: ""}}} =
+      assert %{"user" => %{"zeze3" => %ParticipantMedia{screen_sharing: "2", high_quality: "", audio_only: "", low_quality: "" }}} =
         PerfectNegotiation.upsert_screen_sharing_value(state.sdp_state, "user", "zeze3", "2")
     end
     test "update value for non-existing streamer member should insert value", state do
-      assert %{"user1" => %{"zeze1" => %ParticipantMedia{screen_sharing: "2", high_quality: "", audio_only: "", low_quality: ""}}, "user" => %{}} =
+      assert %{"user1" => %{"zeze1" => %ParticipantMedia{screen_sharing: "2", high_quality: "", audio_only: "", low_quality: "" }}, "user" => %{}} =
         PerfectNegotiation.upsert_screen_sharing_value(state.sdp_state, "user1", "zeze1", "2")
     end
   end
