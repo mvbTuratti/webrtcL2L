@@ -1,7 +1,7 @@
 defmodule SdpTable.PeerFinding.PeerFindingTest do
   use WebrtcL2LWeb.ConnCase, async: true
   alias WebrtcL2L.SdpTable.PeerFinding
-  alias WebrtcL2L.SdpTable.MediaStructs.ParticipantMedia
+  alias WebrtcL2L.SdpTable.MediaStructs.{ParticipantMedia, DataChannel}
 
   describe "upsert_perfect_negotiation_of_high_quality_stream/4" do
     setup do
@@ -61,6 +61,26 @@ defmodule SdpTable.PeerFinding.PeerFindingTest do
       PeerFinding.upsert_perfect_negotiation_of_screen_sharing_stream(state.room, "user", "zeze", "sdp value")
       PeerFinding.upsert_perfect_negotiation_of_screen_sharing_stream(state.room, "user", "zeze", "sdp value2")
       assert %{"user" => %{"zeze" => %ParticipantMedia{screen_sharing: "sdp value2"}}} = :sys.get_state(state.room)
+    end
+  end
+  describe "join_call/3" do
+    setup do
+      {:ok, room_pid} = PeerFinding.start_link([])
+      {:ok, room: room_pid}
+    end
+    test "is able to join an empty room and get no list of recommendations", state do
+      assert {:ok, [], []} = PeerFinding.join_call(state.room, "user", "sdp value")
+      assert %{data_channel: %{"user" => %DataChannel{room: "sdp value"}}} = :sys.get_state(state.room)
+    end
+    test "gets recommendation from room with members", state do
+      PeerFinding.join_call(state.room, "user", "sdp value")
+      assert {:ok, [{"user", "sdp value"}], ["user"]} = PeerFinding.join_call(state.room, "user1", "sdp value")
+    end
+    test "gets recommendation after multiple insertions", state do
+      PeerFinding.join_call(state.room, "user", "sdp value")
+      PeerFinding.join_call(state.room, "user1", "sdp value1")
+      PeerFinding.update_data_channel_sdp_value(state.room, "user", "sdp value")
+      assert {:ok, [{"user1", "sdp value1"},{"user", "sdp value"}], ["user1","user"]} = PeerFinding.join_call(state.room, "user2", "sdp value2")
     end
   end
 end

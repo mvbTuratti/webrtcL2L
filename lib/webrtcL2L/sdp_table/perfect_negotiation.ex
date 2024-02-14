@@ -46,7 +46,6 @@ defmodule WebrtcL2L.SdpTable.PerfectNegotiation do
     new_participant_media = %ParticipantMedia{low_quality: sdp_string_value}
     _upsert_sdp_value(&ParticipantMedia.set_low_quality_value/2, new_participant_media, current_sdp_state, user, routee, sdp_string_value)
   end
-
   def _get_sdp_value(current_sdp_state, user, routee, type_of_stream) do
     value = Map.get(current_sdp_state, user, %{})
       |> Map.get(routee, %ParticipantMedia{})

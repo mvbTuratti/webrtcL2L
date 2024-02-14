@@ -38,7 +38,7 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   def handle_call({:update_sdp_data_channel, user, sdp_string_value}, _, current_state) do
     case Map.get(current_state[:data_channel], user, nil) do
       nil ->
-        current_state = Kernel.put_in(current_state, [:data_channel, user], %DataChannel{room: sdp_string_value})
+        current_state = Kernel.put_in(current_state, [:data_channel, user], DataChannel.create_new_data_channel(sdp_string_value))
         {:reply, :ok, current_state, @timeout}
       user_data_channel ->
         new_state = Kernel.put_in(current_state, [:data_channel, user], DataChannel.set_room_value(user_data_channel, sdp_string_value))
@@ -46,14 +46,14 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
     end
   end
   def handle_call({:join_room, new_member, sdp_string_value}, _, current_state) do
-    {current_state, users_sdp, affected_users} =
+    {new_state, users_sdp, affected_users} =
       Map.keys(current_state[:data_channel])
-      |> Enum.reduce({current_state, [], []}, fn user_name, {current_state, users_sdps, current_users} ->
-        {:ok, user_data_channel, sdp_value} = DataChannel.user_joining(current_state[:data_channel][user_name], new_member)
-        {Kernel.put_in(current_state, [:data_channel, user_name], user_data_channel), [{user_name, sdp_value} | users_sdps], [user_name | current_users]}
-      end)
-    current_state = Kernel.put_in(current_state, [:data_channel, new_member], %DataChannel{room: sdp_string_value}) #set PN for user
-    {:reply, {:ok, users_sdp, affected_users}, current_state, @timeout}
+        |> Enum.reduce({current_state, [], []}, fn current_user_name, {new_state, list_of_user_and_sdp, list_of_affected_users} ->
+          {:ok, a_user_data_channel, sdp_value} = DataChannel.user_joining(new_state[:data_channel][current_user_name], new_member)
+          {Kernel.put_in(new_state, [:data_channel, current_user_name], a_user_data_channel), [{current_user_name, sdp_value} | list_of_user_and_sdp], [current_user_name | list_of_affected_users]}
+        end)
+    new_state = Kernel.put_in(new_state, [:data_channel, new_member], DataChannel.create_new_data_channel(sdp_string_value)) #set PN for user
+    {:reply, {:ok, users_sdp, affected_users}, new_state, @timeout}
   end
 
   @spec upsert_perfect_negotiation_of_high_quality_stream(pid(), String.t(), String.t(), String.t()) :: :ok
@@ -103,5 +103,5 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   """
   @spec join_call(pid(), String.t(), String.t()) :: {:ok, [{String.t(), String.t()}], [String.t()]}
   def join_call(pid, streamer, sdp_value), do: GenServer.call(pid, {:join_room, streamer, sdp_value})
-
+  def update_data_channel_sdp_value(pid, streamer, sdp_value), do: GenServer.call(pid, {:update_sdp_data_channel, streamer, sdp_value})
 end
