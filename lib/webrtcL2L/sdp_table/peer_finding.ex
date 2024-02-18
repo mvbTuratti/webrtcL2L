@@ -55,6 +55,18 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
     new_state = Kernel.put_in(new_state, [:data_channel, new_member], DataChannel.create_new_data_channel(sdp_string_value)) #set PN for user
     {:reply, {:ok, users_sdp, affected_users}, new_state, @timeout}
   end
+  def handle_call({:user_leaving, user}, _, current_state) do
+    new_state =
+      Map.keys(current_state[:data_channel])
+       |> Enum.reduce(current_state, fn current_user_name, new_state ->
+        data_media = DataChannel.remove_partner(new_state[:data_channel][current_user_name], user)
+        Kernel.put_in(new_state, [:data_channel, current_user_name], data_media)
+      end)
+    {_, new_data_channel_state} = Map.pop(new_state[:data_channel], user) # Remove the user as key
+    {:reply, :ok, %{new_state | data_channel: new_data_channel_state}, @timeout}
+  end
+
+ # Client exposed functions
 
   @spec upsert_perfect_negotiation_of_high_quality_stream(pid(), String.t(), String.t(), String.t()) :: :ok
   def upsert_perfect_negotiation_of_high_quality_stream(pid, streamer, routee, sdp_string_value) do
@@ -103,5 +115,9 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
   """
   @spec join_call(pid(), String.t(), String.t()) :: {:ok, [{String.t(), String.t()}], [String.t()]}
   def join_call(pid, streamer, sdp_value), do: GenServer.call(pid, {:join_room, streamer, sdp_value})
+
+  @spec update_data_channel_sdp_value(pid(), String.t(), String.t()) :: :ok
   def update_data_channel_sdp_value(pid, streamer, sdp_value), do: GenServer.call(pid, {:update_sdp_data_channel, streamer, sdp_value})
+  @spec remove_user(pid(), String.t()) :: :ok
+  def remove_user(pid, watcher), do: GenServer.call(pid, {:user_leaving, watcher})
 end

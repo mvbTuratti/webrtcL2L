@@ -25,4 +25,8 @@ defmodule WebrtcL2L.SdpTable.MediaStructs.DataChannel do
     sdp_values = Kernel.put_in(data_channel.members, [user], sdp_value)
     %{data_channel | members: sdp_values}
   end
+  def remove_partner(%DataChannel{} = data_channel, user) do
+    {_, member_routing} = Map.pop(data_channel.members, user)
+    %{data_channel | members: member_routing}
+  end
 end

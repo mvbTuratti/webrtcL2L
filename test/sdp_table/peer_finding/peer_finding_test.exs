@@ -83,4 +83,28 @@ defmodule SdpTable.PeerFinding.PeerFindingTest do
       assert {:ok, [{"user1", "sdp value1"},{"user", "sdp value"}], ["user1","user"]} = PeerFinding.join_call(state.room, "user2", "sdp value2")
     end
   end
+  describe "remove_user/2" do
+    setup do
+      {:ok, room_pid} = PeerFinding.start_link([])
+      PeerFinding.join_call(room_pid, "user", "sdp value")
+      PeerFinding.join_call(room_pid, "user1", "sdp value1")
+      PeerFinding.update_data_channel_sdp_value(room_pid, "user", "sdp value")
+      {:ok, room: room_pid}
+    end
+    test "no-op for non-existing users", state do
+      PeerFinding.remove_user(state.room, "user2")
+      assert %{data_channel: %{"user" => %DataChannel{room: "sdp value"}, "user1" => %DataChannel{room: "sdp value1"}}} =
+        :sys.get_state(state.room)
+    end
+    test "removes user and its nestings", state do
+      PeerFinding.remove_user(state.room, "user1")
+      assert %{data_channel: %{"user" => %DataChannel{room: "sdp value", members: %{}}}, screen_sharing: ""} ==
+        :sys.get_state(state.room)
+    end
+    test "remove two users", state do
+      PeerFinding.remove_user(state.room, "user")
+      PeerFinding.remove_user(state.room, "user1")
+      assert %{data_channel: %{}, screen_sharing: ""} == :sys.get_state(state.room)
+    end
+  end
 end

@@ -27,4 +27,23 @@ defmodule SdpTable.DataChannel.DataChannelTest do
       assert %DataChannel{room: "sdp2"} = DataChannel.set_room_value(state.data_channel, "sdp2")
     end
   end
+  describe "remove_partner/2" do
+    setup do
+      {:ok, data_channel: %DataChannel{room: "sdp", members: _get_two_members()}}
+    end
+    test "no-op for non existing watcher", state do
+      two_members = _get_two_members()
+      assert %DataChannel{room: "sdp", members: two_members} == DataChannel.remove_partner(state.data_channel, "user3")
+    end
+    test "successfully remove one watcher", state do
+      assert %DataChannel{room: "sdp", members: %{"user" => "sdp 1"}} == DataChannel.remove_partner(state.data_channel, "user2")
+    end
+    test "successfully remove two watchers", state do
+      data_channel = DataChannel.remove_partner(state.data_channel, "user2")
+        |> DataChannel.remove_partner("user")
+      assert %DataChannel{room: "sdp", members: %{}} == data_channel
+    end
+  end
+
+  defp _get_two_members(), do: %{"user" => "sdp 1", "user2" => "sdp 2"}
 end
