@@ -11,6 +11,9 @@
       To: "opacity-0"
   -->
   <div class="fixed inset-0 hidden bg-gray-500 bg-opacity-75 transition-opacity md:block"> </div>
+  <%= inspect(@presences) %>
+  <%= inspect(@routing_pid) %>
+  <%= inspect(@peer_finding_pid) %>
 
   <div class="fixed inset-0 z-10 overflow-y-auto">
     <div class={"#{if @conference, do: "hidden", else: "flex"} min-h-full items-stretch justify-center text-center md:items-center md:px-2 lg:px-4"}>
