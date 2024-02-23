@@ -80,6 +80,10 @@ defmodule WebrtcL2L.RoutingState.Routing do
       |> Graph.in_edges(viewer)
       |> Enum.map(fn %{v1: source, weight: weight} -> {source, weight} end)
   end
+  @impl true
+  def handle_info(:timeout, state) do
+    {:stop, :normal, state}
+  end
   @spec create_stream(pid(), :high_quality | :low_quality | :audio_only, String.t()) :: pid()
   def create_stream(pid, :high_quality = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})
   def create_stream(pid, :low_quality = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})

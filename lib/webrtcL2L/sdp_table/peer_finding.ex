@@ -65,6 +65,10 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
     {_, new_data_channel_state} = Map.pop(new_state[:data_channel], user) # Remove the user as key
     {:reply, :ok, %{new_state | data_channel: new_data_channel_state}, @timeout}
   end
+  @impl true
+  def handle_info(:timeout, state) do
+    {:stop, :normal, state}
+  end
 
  # Client exposed functions
 
