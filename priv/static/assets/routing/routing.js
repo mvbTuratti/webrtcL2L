@@ -21,22 +21,6 @@ let configSettings = {audio: true, video: true};
 
 let currentView = 1;
 
-
-const remoteProxy = new Proxy(remoteStreams, {
-    set: function (target, key, value) {
-     console.log(`${key} set from ${remoteStreams.key} to ${value}, target = ${target.size}`);
-
-     if (!(key in target)) target.size += 1;
-     target[key] = value;
-     if (target.size > 4 && currentView == 1){
-        document.getElementById("salas-right").style.display = "block";
-     }
-     return true;
-   },
-});
-
-let remoteStream = {};
-
 // audioSelect.onclick = () => {
 //     if (videoDropdown.className.includes('block')){
 //         videoDropdown.className = videoDropdown.className.replace('block', 'hidden');
@@ -225,18 +209,222 @@ let remoteStream = {};
 
 // Code for webrtc
 
-const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
+class PeerConnections {
+    constructor() {
+        this.users = {};
+        this.users.room = new MediaTracks();
+    }
+    createRoomDataChannelOffer() {
+        this.users.room.createDataChannelStream()
+    }
+    answerDataChannelOffer(peer, sdp) {
+        this.users.peer = new MediaTracks();
+        this.users.peer.acceptDataChannelStream(sdp, peer);
+    }
+    responseFromAnswerDataChannel(user, sdp) {
+        // this.users.user = Object.assign({}, this.users.room);
+        this.users.user = Object.assign(Object.create(this.users.room), this.users.room)
+        console.log(this.users.user)
+        this.users.user.assignRemoteDescription(sdp, "room");
+        this.users.room = new MediaTracks();
+        this.users.room.createDataChannelStream("perfect-negotiation-room");
+    }
+}
+class DataChannel {
+    constructor(chat) {
+        this.peer = new RTCPeerConnection(MediaTracks.configuration);
+        console.log(chat)
+        this.dataChannel = chat ? this.setDataChannel(chat) : this.receiveDataChannel();
+    }
+    receiveDataChannel() {
+        console.log("without parameter")
+        this.peer.ondatachannel = (event) => {
+            this.dataChannel = event.channel;
+            const dc = this.dataChannel;
+            const peer = this.peer;
+            this.dataChannel.onopen = (event) => {
+                dc.send(`Hi back from ${self_id}`);
+            }
+            this.dataChannel.onmessage = (event) => {
+                console.log("on message")
+                console.log(event)
+                if (event.iceCandidate) {
+                    try {
+                        peer.addIceCandidate(event.iceCandidate).then("added ice candidate");
+                    } catch (e) {
+                        console.error('Error adding received ice candidate', e);
+                    }
+                }
+            }
+        }
+    }
+    setDataChannel(chat){
+        console.log("with parameter")
+        this.dataChannel = this.peer.createDataChannel(chat);
+        const dc = this.dataChannel;
+        const peer = this.peer;
+        this.dataChannel.onopen = (event) => {
+            dc.send(`Hi you! send from ${self_id}.`);
+        }
+        this.dataChannel.onmessage = (event) => {
+            console.log("on message")
+            console.log(event)
+            if (event.iceCandidate) {
+                try {
+                    peer.addIceCandidate(event.iceCandidate).then("added ice candidate");
+                } catch (e) {
+                    console.error('Error adding received ice candidate', e);
+                }
+            }
+        }
+    }
+    sendMessage(msg) {
+        this.dataChannel.send(msg);
+    }
+}
 
+class MediaTracks {
+    constructor() {
+        this.highQuality = null;
+        this.lowQuality = null;
+        this.audioOnly = null;
+        this.dataChannel = null;
+        this.screenSharing = null;
+    }
+    static configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
+    createHighQualityStream() {
+        this.highQuality = new RTCPeerConnection(MediaTracks.configuration);
+        return this.highQuality;
+    }
+    createLowQualityStream() {
+        this.lowQuality = new RTCPeerConnection(MediaTracks.configuration);
+        return this.lowQuality;
+    }
+    createAudioOnlyStream() {
+        this.audioOnly = new RTCPeerConnection(MediaTracks.configuration);
+        return this.audioOnly;
+    }
+    createScreenSharingStream() {
+        this.screenSharing = new RTCPeerConnection(MediaTracks.configuration);
+        return this.screenSharing;
+    }
+    createDataChannelStream(type = "room") {
+        this.dataChannel = new DataChannel("chat");
+        let offer = this.createOffer(this.dataChannel.peer, this.dataChannel.dataChannel, type);
+        return offer;
+    }
+    assignRemoteDescription(sdp, type) {
+        switch (type) {
+            case "room":
+                this.dataChannel.peer.setRemoteDescription(sdp)
+                break;
+        
+            default:
+                break;
+        }
+    }
+    acceptDataChannelStream(sdp, peer) {
+        this.dataChannel = new DataChannel();
+        setTimeout(() => this.acceptOffer(this.dataChannel.peer, this.dataChannel.dataChannel, "room", sdp, peer), 0);
+    }
+    createOffer(peerConnection, dc, type) {
+        console.log("Called CreateOffer")
+        peerConnection.onicecandidate = e => {
+            if (e.candidate) {
+                if (dc?.readyState == 'open') {
+                    // console.log("CANDIDATE!!!")
+                    dc.send(e.candidate)
+                }
+            }
+         }
+        
+        peerConnection.createOffer().then( o => 
+            peerConnection.setLocalDescription(o)    
+        ).then(p => {
+            console.log("set succesfully") 
+        })
+        peerConnection.addEventListener("icegatheringstatechange", (ev) => {
+            switch(peerConnection.iceGatheringState) {
+              case "new":
+                /* gathering is either just starting or has been reset */
+                break;
+              case "gathering":
+                /* gathering has begun or is ongoing */
+                break;
+              case "complete":
+                /* gathering has ended */
+                console.log("complete state!")
+                const iceoffer = {type: type, pc: peerConnection.localDescription};
+                document.dispatchEvent(sendPayloadToLiveView("ice-candidate", iceoffer)); 
+                break;
+            }
+        });
+        peerConnection.onnegotiationneeded = e => {
+                const iceoffer = {type: `negotiation-${type}`,pc: peerConnection.localDescription};
+                document.dispatchEvent(sendPayloadToLiveView("ice-candidate", iceoffer)); 
+        }
+    }
+    acceptOffer(peerConnection, dc, type, sdp, peer){
+        console.log("Called AcceptOffer!!")
+        peerConnection.onicecandidate = e => {
+            // console.log("answer on ice candidate")
+            if (e.candidate) {
+                if (dc?.readyState == 'open') {
+                    console.log("AcceptOffer candidate")
+                    console.log(dc)
+                    dc.send(e.candidate)
+                }
+            }
+        }
+        peerConnection.addEventListener("icegatheringstatechange", (ev) => {
+            switch(peerConnection.iceGatheringState) {
+              case "new":
+                /* gathering is either just starting or has been reset */
+                break;
+              case "gathering":
+                /* gathering has begun or is ongoing */
+                break;
+              case "complete":
+                /* gathering has ended */
+                console.log("complete state!")
+                break;
+            }
+        });
+        peerConnection.onnegotiationneeded = e => {
+            console.log("NEGOTIATION NEEDED!")
+        }
+        peerConnection.setRemoteDescription(sdp).then(a => {})
+        peerConnection.createAnswer().then(a => peerConnection.setLocalDescription(a)).then(a => {
+            // console.log("answer created");
+            setTimeout(() => {
+                const iceresponse = {source: peer, sdp:peerConnection.localDescription, type: `ice-response-${type}`};
+                document.dispatchEvent(sendPayloadToLiveView("icecandidate-response", iceresponse))
+            }, 0);
+            
+        })
+    }
+}
 
-
-let participants = [];
-let id = "";
+const participants = new PeerConnections();
+let self_id = "";
 let current = 1;
 let sendPayloadToLiveView = (message, payload) => new CustomEvent("room-event", {
     detail: { event: message, payload: payload},
 });
 window.addEventListener(`phx:joining`, (members) => {
-    console.log("joining...2")
+    console.log("joining...")
     console.log(members)
-    document.dispatchEvent(sendPayloadToLiveView("icecandidate-response", {test: "aaaa"}));
+    self_id = members.detail.id
+    if (members.detail.affected_users.length > 0) {
+        Object.entries(members.detail.sdps).forEach(([name, sdp]) => {
+            console.log(`${name} ${sdp}`); // "a 5", "b 7", "c 9"
+            participants.answerDataChannelOffer(name, sdp);
+
+        });
+    }
 })
+window.addEventListener(`phx:ice-response-room`, (payload) => {
+    participants.responseFromAnswerDataChannel(payload.detail.user_id, payload.detail.sdp);
+})
+
+participants.createRoomDataChannelOffer();

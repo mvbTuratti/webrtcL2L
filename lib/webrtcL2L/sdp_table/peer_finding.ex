@@ -118,6 +118,7 @@ defmodule WebrtcL2L.SdpTable.PeerFinding do
     is a list of affected users as to make calls to front-end in the future for setting up new Perfect Negotiation calls.
   """
   @spec join_call(pid(), String.t(), String.t()) :: {:ok, [{String.t(), String.t()}], [String.t()]}
+  def join_call(pid, streamer), do: GenServer.call(pid, {:join_room, streamer, ""})
   def join_call(pid, streamer, sdp_value), do: GenServer.call(pid, {:join_room, streamer, sdp_value})
 
   @spec update_data_channel_sdp_value(pid(), String.t(), String.t()) :: :ok
