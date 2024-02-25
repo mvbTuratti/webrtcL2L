@@ -244,10 +244,13 @@ class DataChannel {
             const peer = this.peer;
             this.dataChannel.onopen = (event) => {
                 dc.send(`Hi back from ${self_id}`);
+                //MURILO
+                // getMetrics(peer);
             }
             this.dataChannel.onmessage = (event) => {
                 console.log("on message")
                 console.log(event)
+                //MURILO
                 if (event.iceCandidate) {
                     try {
                         peer.addIceCandidate(event.iceCandidate).then("added ice candidate");
@@ -263,12 +266,17 @@ class DataChannel {
         this.dataChannel = this.peer.createDataChannel(chat);
         const dc = this.dataChannel;
         const peer = this.peer;
+        console.log(dc);
         this.dataChannel.onopen = (event) => {
             dc.send(`Hi you! send from ${self_id}.`);
+            // getMetrics(peer);
+            //MURILO
+            // setInterval(() => {this.sendMessage({type: "msg", msg: `Hi you! send from ${self_id}. ${}`})})
         }
         this.dataChannel.onmessage = (event) => {
             console.log("on message")
             console.log(event)
+            //MURILO
             if (event.iceCandidate) {
                 try {
                     peer.addIceCandidate(event.iceCandidate).then("added ice candidate");
@@ -428,3 +436,87 @@ window.addEventListener(`phx:ice-response-room`, (payload) => {
 })
 
 participants.createRoomDataChannelOffer();
+
+
+// a wrapper around getStats which hides the differences (where possible)
+// following code-snippet is taken from somewhere on the github
+// function _getStats(peer, cb) {
+//     if (!!navigator.mozGetUserMedia) {
+//         peer.getStats(
+//             function (res) {
+//                 var items = [];
+//                 res.forEach(function (result) {
+//                     items.push(result);
+//                 });
+//                 cb(items);
+//             },
+//             cb
+//         );
+//     } else {
+//         peer.getStats(function (res) {
+//             var items = [];
+//             res.result().forEach(function (result) {
+//                 var item = {};
+//                 result.names().forEach(function (name) {
+//                     item[name] = result.stat(name);
+//                 });
+//                 item.id = result.id;
+//                 item.type = result.type;
+//                 item.timestamp = result.timestamp;
+//                 items.push(item);
+//             });
+//             cb(items);
+//         });
+//     }
+// };
+// function getStats(peer) {
+//     _getStats(peer, function (results) {
+//         for (let i = 0; i < results.length; ++i) {
+//             let res = results[i];
+//             if (res.googCodecName == 'opus') {
+//                 if (!window.prevBytesSent) 
+//                     window.prevBytesSent = res.bytesSent;
+
+//                 let bytes = res.bytesSent - window.prevBytesSent;
+//                 window.prevBytesSent = res.bytesSent;
+
+//                 let kilobytes = bytes / 1024;
+//                 console.log(kilobytes.toFixed(1) + ' kbits/s');
+//             }
+//         }
+
+//         setTimeout(function () {
+//             getStats(peer);
+//         }, 1000);
+//     });
+// }
+
+// function getMetrics(myPeerConnection) {
+//     let reportId = setInterval((myPeerConnection) => {
+//         myPeerConnection.getStats(null).then((stats) => {
+//           let statsOutput = "";
+      
+//           stats.forEach((report) => {
+//             statsOutput +=
+//               `${report.type}\nID:${report.id}\n` +
+//               `Timestamp:${report.timestamp}\n`;
+      
+//             // Now the statistics for this report; we intentionally drop the ones we
+//             // sorted to the top above
+      
+//             Object.keys(report).forEach((statName) => {
+//               if (
+//                 statName !== "id" &&
+//                 statName !== "timestamp" &&
+//                 statName !== "type"
+//               ) {
+//                 statsOutput += `${statName}: ${report[statName]}\n`;
+//               }
+//             });
+//           });
+      
+//           console.log(statsOutput);
+//         });
+//       }, 6000, myPeerConnection);
+//     return reportId;
+// }
