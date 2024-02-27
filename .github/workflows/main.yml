@@ -45,7 +45,7 @@ jobs:
           known_hosts: 'to be defined on next step'
 
       - name: Add Known Hosts
-        run: ssh-keyscan -H ${{ secrets.SSH_L2L_CONFERENCE }} >> ~/.ssh/known_hosts
+        run: ssh-keyscan -H ${{ secrets.SSH_PUBLIC_KEY }} >> ~/.ssh/known_hosts
 
       - name: Rename Old Build Folder
         uses: appleboy/ssh-action@master
