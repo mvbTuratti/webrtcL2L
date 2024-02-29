@@ -1,28 +1,15 @@
-test: 
-  # A job to run your tests, linters, etc
-
-deploy:
-  needs: test # Will only run if the test job succeeds
-  if: github.ref == 'refs/heads/main' # Only run this job if it is on the main branch
-
-  runs-on: ubuntu-latest
-
-  steps:
-    - uses: actions/checkout@v2
-      with:
-        ref: main # Check out main instead of the latest commit
-        fetch-depth: 0 # Checkout the whole branch
-        
-    - uses: actions/setup-python@v2
-      with:
-        python-version: 3.8.1
-        
-    - uses: mhanberg/gigalixir-action@<current release>
-      with:
-        APP_SUBFOLDER: webrtcL2L  # Add only if you want to deploy an app that is not at the root of your repository
-        GIGALIXIR_APP: webrtcl2l # Feel free to also put this in your secrets
-        GIGALIXIR_CLEAN: true # defaults to false
-        GIGALIXIR_USERNAME: ${{ secrets.EMAIL_ADDRESS }}
-        GIGALIXIR_PASSWORD: ${{ secrets.GIGALIXIR_PASSWORD }}
-        MIGRATIONS: false  # defaults to true
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_L2L_CONFERENCE }}
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged
+    steps:
+      - uses: actions/checkout@v1
+      - run: sudo pip install gigalixir --ignore-installed six
+      - run: gigalixir login -e "${{ secrets.EMAIL_ADDRESS }}" -y -p "${{ secrets.GIGALIXIR_PASSWORD }}"
+      - run: gigalixir git:remote webrtcl2l
+      - run: git push -f gigalixir HEAD:refs/heads/master
