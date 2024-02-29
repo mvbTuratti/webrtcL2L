@@ -1,8 +1,8 @@
 on:
+  push:
+    branches: ['main']
   pull_request:
-    types: [closed]
-    branches:
-      - master
+    branches: ['main']
 jobs:
   docker:
     runs-on: ubuntu-latest
