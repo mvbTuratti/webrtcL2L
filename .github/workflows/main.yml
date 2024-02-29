@@ -1,60 +1,28 @@
-name: Server Deploy
-on:
-  push:
-    branches: ['main']
-  pull_request:
-    branches: ['main']
+test: 
+  # A job to run your tests, linters, etc
 
-jobs:
-  CI-CD:
-    runs-on: ubuntu-latest
-    env:
-      MIX_ENV: prod
-      
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Elixir
-        uses: erlef/setup-beam@61e01a43a562a89bfc54c7f9a378ff67b03e4a21
-        with:
-          elixir-version: '1.12.2'
-          otp-version: '24.0'
+deploy:
+  needs: test # Will only run if the test job succeeds
+  if: github.ref == 'refs/heads/main' # Only run this job if it is on the main branch
 
-      - name: Restore Dependencies Cache
-        uses: actions/cache@v2
-        with:
-          path: deps
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+  runs-on: ubuntu-latest
 
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Compile Release
-        run: MIX_ENV=prod mix compile
-      
-      - name: Compile Assets
-        run: MIX_ENV=prod mix assets.deploy
-      
-      - name: Release
-        run: mix phx.gen.release
-
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_L2L_CONFERENCE }}
-          known_hosts: 'to be defined on next step'
-
-      - name: Add Known Hosts
-        run: ssh-keyscan -H ${{ secrets.SERVER_IP_ADD }} >> ~/.ssh/known_hosts
-
-      - name: Deploy Release with RSYNC 
-        run: rsync -avz ./_build ${{ secrets.APPLICATION_SERVER_SSH_USER_SDX }}@${{ secrets.SERVER_IP_ADD }}:~
-
-      - name: Start Application
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_IP_ADD }}
-          username: ${{ secrets.APPLICATION_SERVER_SSH_USER_SDX }}
-          key: ${{ secrets.SSH_L2L_CONFERENCE }}
-          script_stop: true
-          script: sudo -S _build/prod/rel/webrtcL2L/bin/webrtcL2L start
+  steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: main # Check out main instead of the latest commit
+        fetch-depth: 0 # Checkout the whole branch
+        
+    - uses: actions/setup-python@v2
+      with:
+        python-version: 3.8.1
+        
+    - uses: mhanberg/gigalixir-action@<current release>
+      with:
+        APP_SUBFOLDER: webrtcL2L  # Add only if you want to deploy an app that is not at the root of your repository
+        GIGALIXIR_APP: webrtcl2l # Feel free to also put this in your secrets
+        GIGALIXIR_CLEAN: true # defaults to false
+        GIGALIXIR_USERNAME: ${{ secrets.EMAIL_ADDRESS }}
+        GIGALIXIR_PASSWORD: ${{ secrets.GIGALIXIR_PASSWORD }}
+        MIGRATIONS: false  # defaults to true
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_L2L_CONFERENCE }}
