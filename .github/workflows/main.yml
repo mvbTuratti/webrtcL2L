@@ -1,14 +1,42 @@
+name: Elixir CI
+
 on:
   push:
-    branches: ['main']
+    branches: [ main ]
   pull_request:
-    branches: ['main']
+    branches: [ main ]
+
 jobs:
-  docker:
+  test:
+    name: Build and test
     runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Elixir
+      uses: erlef/setup-elixir@885971a72ed1f9240973bd92ab57af8c1aa68f24
+      with:
+        elixir-version: '1.13.3' # Define the elixir version [required]
+        otp-version: '24.1' # Define the OTP version [required]
+    - name: Restore dependencies cache
+      uses: actions/cache@v2
+      with:
+        path: deps
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+    - name: Install dependencies
+      run: mix deps.get
+    - name: Run tests
+      run: mix test
+    - name: Check Formatting
+      run: mix format --check-formatted
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v1
       - run: sudo pip install gigalixir --ignore-installed six
       - run: gigalixir login -e "${{ secrets.EMAIL_ADDRESS }}" -y -p "${{ secrets.GIGALIXIR_PASSWORD }}"
-      - run: gigalixir git:remote webrtcl2l
+      - run: gigalixir git:remote ${{ secrets.GIGALIXIR_APP_NAME }}
       - run: git push -f gigalixir HEAD:refs/heads/master
+
