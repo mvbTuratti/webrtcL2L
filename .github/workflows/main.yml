@@ -1,100 +1,60 @@
-name: Elixir CI
-
-# Define workflow that runs when changes are pushed to the
-# `main` branch or pushed to a PR branch that targets the `main`
-# branch. Change the branch name if your project uses a
-# different name for the main branch like "master" or "production".
+name: Server Deploy
 on:
   push:
-    branches: [ "main" ]  # adapt branch for project
+    branches: ['main']
   pull_request:
-    branches: [ "main" ]  # adapt branch for project
-
-# Sets the ENV `MIX_ENV` to `test` for running tests
-env:
-  MIX_ENV: test
-
-permissions:
-  contents: read
+    branches: ['main']
 
 jobs:
-  test:
+  CI-CD:
     runs-on: ubuntu-latest
-    name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
-    strategy:
-      # Specify the OTP and Elixir versions to use when building
-      # and running the workflow steps.
-      matrix:
-        otp: ['25.0.4']       # Define the OTP version [required]
-        elixir: ['1.14.1']    # Define the elixir version [required]
+    env:
+      MIX_ENV: prod
+      
     steps:
-    # Step: Setup Elixir + Erlang image as the base.
-    - name: Set up Elixir
-      uses: erlef/setup-beam@v1
-      with:
-        otp-version: ${{matrix.otp}}
-        elixir-version: ${{matrix.elixir}}
+      - uses: actions/checkout@v3
+      - name: Set up Elixir
+        uses: erlef/setup-beam@61e01a43a562a89bfc54c7f9a378ff67b03e4a21
+        with:
+          elixir-version: '1.12.2'
+          otp-version: '24.0'
 
-    # Step: Check out the code.
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Restore Dependencies Cache
+        uses: actions/cache@v2
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
 
-    # Step: Define how to cache deps. Restores existing cache if present.
-    - name: Cache deps
-      id: cache-deps
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-elixir-deps
-      with:
-        path: deps
-        key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-mix-${{ env.cache-name }}-
+      - name: Install dependencies
+        run: mix deps.get
 
-    # Step: Define how to cache the `_build` directory. After the first run,
-    # this speeds up tests runs a lot. This includes not re-compiling our
-    # project's downloaded deps every run.
-    - name: Cache compiled build
-      id: cache-build
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-compiled-build
-      with:
-        path: _build
-        key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-mix-${{ env.cache-name }}-
-          ${{ runner.os }}-mix-
+      - name: Compile Release
+        run: MIX_ENV=prod mix compile
+      
+      - name: Compile Assets
+        run: MIX_ENV=prod mix assets.deploy
+      
+      - name: Release
+        run: mix phx.gen.release
 
-    # Step: Conditionally bust the cache when job is re-run.
-    # Sometimes, we may have issues with incremental builds that are fixed by
-    # doing a full recompile. In order to not waste dev time on such trivial
-    # issues (while also reaping the time savings of incremental builds for
-    # *most* day-to-day development), force a full recompile only on builds
-    # that are retried.
-    - name: Clean to rule out incremental build as a source of flakiness
-      if: github.run_attempt != '1'
-      run: |
-        mix deps.clean --all
-        mix clean
-      shell: sh
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_L2L_CONFERENCE }}
+          known_hosts: 'to be defined on next step'
 
-    # Step: Download project dependencies. If unchanged, uses
-    # the cached version.
-    - name: Install dependencies
-      run: mix deps.get
+      - name: Add Known Hosts
+        run: ssh-keyscan -H ${{ secrets.SERVER_IP_ADD }} >> ~/.ssh/known_hosts
 
-    # Step: Compile the project treating any warnings as errors.
-    # Customize this step if a different behavior is desired.
-    - name: Compiles without warnings
-      run: mix compile --warnings-as-errors
+      - name: Deploy Release with RSYNC 
+        run: rsync -avz ./_build ${{ secrets.APPLICATION_SERVER_SSH_USER_SDX }}@${{ secrets.SERVER_IP_ADD }}:~
 
-    # Step: Check that the checked in code has already been formatted.
-    # This step fails if something was found unformatted.
-    # Customize this step as desired.
-    - name: Check Formatting
-      run: mix format --check-formatted
-
-    # Step: Execute the tests.
-    - name: Run tests
-      run: mix test
+      - name: Start Application
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP_ADD }}
+          username: ${{ secrets.APPLICATION_SERVER_SSH_USER_SDX }}
+          key: ${{ secrets.SSH_L2L_CONFERENCE }}
+          script_stop: true
+          script: sudo -S _build/prod/rel/webrtcL2L/bin/webrtcL2L start
