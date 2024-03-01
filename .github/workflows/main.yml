@@ -70,4 +70,6 @@ jobs:
           key: ${{ secrets.SSH_L2L_CONFERENCE }}
           envs: SECRET_KEY_BASE=${{ steps.generate_secret.outputs.secret_key_base }}
           script_stop: true
-          script: sudo -S MIX_ENV=prod APP_NAME=demo PORT=4000 _build/prod/rel/demo/bin/demo start
+          script: |
+          export SECRET_KEY_BASE=${{ steps.generate_secret.outputs.secret_key_base }}
+          sudo -S MIX_ENV=prod APP_NAME=demo PORT=4000 _build/prod/rel/demo/bin/demo start
