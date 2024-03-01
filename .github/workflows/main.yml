@@ -68,6 +68,6 @@ jobs:
           host: ${{ secrets.SERVER_IP_ADD }}
           username: ${{ secrets.APPLICATION_SERVER_SSH_USER_SDX }}
           key: ${{ secrets.SSH_L2L_CONFERENCE }}
-          secret_key_base: ${{ steps.generate_secret.outputs.SECRET_KEY_BASE }}
+          envs: SECRET_KEY_BASE=${{ steps.generate_secret.outputs.secret_key_base }}
           script_stop: true
           script: sudo -S MIX_ENV=prod APP_NAME=demo PORT=4000 _build/prod/rel/demo/bin/demo start
