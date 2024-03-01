@@ -71,5 +71,5 @@ jobs:
           envs: SECRET_KEY_BASE=${{ steps.generate_secret.outputs.secret_key_base }}
           script_stop: true
           script: |
-            export SECRET_KEY_BASE=${{ steps.generate_secret.outputs.secret_key_base }}
+            export SECRET_KEY_BASE=${{ steps.generate_secret.outputs.secret_key_base }} &>/dev/null
             sudo -S MIX_ENV=prod APP_NAME=demo PORT=4000 _build/prod/rel/demo/bin/demo daemon
