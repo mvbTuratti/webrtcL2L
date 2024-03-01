@@ -34,9 +34,18 @@ jobs:
       
       - name: Compile Assets
         run: MIX_ENV=prod mix assets.deploy
+
+      - name: Assets digest
+        run: mix phx.digest
+
+      - name: Create key base secret
+        run: export SECRET_KEY_BASE="$(mix phx.gen.secret)"
       
       - name: Release
         run: mix phx.gen.release
+
+      - name: Finish Release
+        run: MIX_ENV=prod mix release demo
 
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
@@ -57,4 +66,4 @@ jobs:
           username: ${{ secrets.APPLICATION_SERVER_SSH_USER_SDX }}
           key: ${{ secrets.SSH_L2L_CONFERENCE }}
           script_stop: true
-          script: sudo -S _build/prod/rel/webrtcL2L/bin/webrtcL2L start
+          script: sudo -S MIX_ENV=prod APP_NAME=demo PORT=4000 _build/prod/rel/demo/bin/demo start

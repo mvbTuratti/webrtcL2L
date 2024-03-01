@@ -10,7 +10,13 @@ defmodule WebrtcL2L.MixProject do
       compilers: Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      releases: [
+        demo: [
+          include_executables_for: [:unix],
+          applications: [runtime_tools: :permanent]
+        ],
+      ]
     ]
   end
 
