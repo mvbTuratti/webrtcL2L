@@ -12,7 +12,7 @@ config :webrtcL2L, WebrtcL2LWeb.Endpoint,
   url: [host: "localhost"],
   render_errors: [view: WebrtcL2LWeb.ErrorView, accepts: ~w(html json), layout: false],
   pubsub_server: WebrtcL2L.PubSub,
-  live_view: [signing_salt: "+RFoafRf"]
+  live_view: [signing_salt: "+RFoafRf"],
   server: true
 
 # Configures the mailer
