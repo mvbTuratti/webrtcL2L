@@ -53,7 +53,6 @@ defmodule Conference.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.2"},
-      {:dart_sass, "~> 0.5", runtime: Mix.env() == :dev},
       {:libgraph, "~> 0.16.0"}
     ]
   end
@@ -68,10 +67,9 @@ defmodule Conference.MixProject do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind conference", "sass default", "esbuild conference"],
+      "assets.build": ["tailwind conference", "esbuild conference"],
       "assets.deploy": [
         "tailwind conference --minify",
-        "sass default",
         "esbuild conference --minify",
         "phx.digest"
       ]

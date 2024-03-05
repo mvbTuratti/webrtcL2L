@@ -16,7 +16,6 @@ config :conference, ConferenceWeb.Endpoint,
   secret_key_base: "Mw8zSB5rIdhGq8ScNoKlghRabAgA+6XZQ084dLkDES6ePJNKV2BKilyamX7mAU0Q",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:conference, ~w(--sourcemap=inline --watch)]},
-    sass: {DartSass, :install_and_run, [:default, ~w(--watch)]},
     tailwind: {Tailwind, :install_and_run, [:conference, ~w(--watch)]}
   ]
 
