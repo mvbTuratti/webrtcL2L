@@ -206,6 +206,73 @@ let currentView = 1;
 //     painel.className = painel.className.replace('hidden', 'flex');
 //     painel.onmouseleave = () => hidePainel();
 // };
+function generateStringOfByteSize(byteSize, char = '') {
+    if (char.length > 1) {
+        throw new Error('Character must be a single character');
+    }
+
+    const charCode = char.charCodeAt(0) || 0;
+
+    // Create a typed array of the desired byte size
+    const buffer = new Uint8Array(byteSize);
+    
+    // Fill the array with the character code
+    buffer.fill(charCode);
+
+    // Convert the typed array to a string
+    const result = String.fromCharCode.apply(null, buffer);
+
+    return result;
+}
+class BandwidthEvaluator {
+    constructor() {
+        this.state = 'INIT';
+        this.sentPackets = {};
+        // Bind the methods to the instance to preserve the context
+        this.sendPacket = this.sendPacket.bind(this);
+        this.receiveAck = this.receiveAck.bind(this);
+    }
+
+    startEvaluation(dataChannel) {
+        this.state = 'SENDING';
+        this.timer = setTimeout(() => {
+            this.finishEvaluation();
+        }, 6000);
+        const intervalId = setInterval(this.sendPacket, 1000, dataChannel);
+        setTimeout(() => {
+            clearInterval(intervalId);
+        }, 4000);
+    }
+
+    sendPacket(dataChannel) {
+        // send 3Mbps of 1460 bytes per frame.
+        for (let index = 0; index <= 256; index++) {
+            console.log("Current state", this.state)
+            if (this.state !== 'SENDING') return; // Use strict equality check
+            const timestamp = performance.now();
+            const action = `TYPE 1 - ${timestamp.toString()} - `;
+            const timestampByteSize = new Blob([action]).size;
+            const byteSize = 1460 - timestampByteSize;
+            const packet = `${action}${generateStringOfByteSize(byteSize)}`;
+            this.sentPackets[timestamp] = {};
+            dataChannel.send(packet);
+        }
+    }
+
+    receiveAck(originalStamp, directStamp) {
+        if (this.state !== 'SENDING') return; // Use strict equality check
+        const timestamp = performance.now();
+        this.sentPackets[originalStamp] = { direct: directStamp - originalStamp, rtt: timestamp - originalStamp };
+        console.log(`Received ack at ${timestamp}`);
+    }
+
+    finishEvaluation() {
+        clearTimeout(this.timer);
+        this.state = 'FINISHED';
+        console.log('Evaluation finished');
+        console.log(this.sentPackets);
+    }
+}
 
 // Code for webrtc
 
@@ -213,6 +280,9 @@ class PeerConnections {
     constructor() {
         this.users = {};
         this.users.room = new MediaTracks();
+        this.createRoomDataChannelOffer = this.createRoomDataChannelOffer.bind(this);
+        this.answerDataChannelOffer = this.answerDataChannelOffer.bind(this);
+        this.responseFromAnswerDataChannel = this.responseFromAnswerDataChannel.bind(this);
     }
     createRoomDataChannelOffer() {
         this.users.room.createDataChannelStream()
@@ -230,11 +300,16 @@ class PeerConnections {
         this.users.room.createDataChannelStream("perfect-negotiation-room");
     }
 }
+
 class DataChannel {
     constructor(chat) {
         this.peer = new RTCPeerConnection(MediaTracks.configuration);
-        console.log(chat)
         this.dataChannel = chat ? this.setDataChannel(chat) : this.receiveDataChannel();
+        this.bandwidthEvaluation = new BandwidthEvaluator();
+
+        this.receiveDataChannel = this.receiveDataChannel.bind(this);
+        this.setDataChannel = this.setDataChannel.bind(this);
+        this.sendMessage = this.sendMessage.bind(this);
     }
     receiveDataChannel() {
         console.log("without parameter")
@@ -244,8 +319,7 @@ class DataChannel {
             const peer = this.peer;
             this.dataChannel.onopen = (event) => {
                 dc.send(`Hi back from ${self_id}`);
-                //MURILO
-                // getMetrics(peer);
+                this.bandwidthEvaluation.startEvaluation(dc);
             }
             this.dataChannel.onmessage = (event) => {
                 console.log("on message")
@@ -258,6 +332,14 @@ class DataChannel {
                         console.error('Error adding received ice candidate', e);
                     }
                 }
+                else if (event.data.includes("TYPE 1")) {
+                    let [action, timestamp, dummyData] = event.data.split(" - ")
+                    dc.send(`ACK 1 - ${timestamp} - ${performance.now()}`)
+                }
+                else if (event.data.includes("ACK 1")) {
+                    let [ack, timestamp, directStamp] = event.data.split(" - ")
+                    this.bandwidthEvaluation.receiveAck(parseFloat(timestamp), parseFloat(directStamp));
+                }
             }
         }
     }
@@ -269,9 +351,7 @@ class DataChannel {
         console.log(dc);
         this.dataChannel.onopen = (event) => {
             dc.send(`Hi you! send from ${self_id}.`);
-            // getMetrics(peer);
-            //MURILO
-            // setInterval(() => {this.sendMessage({type: "msg", msg: `Hi you! send from ${self_id}. ${}`})})
+            this.bandwidthEvaluation.startEvaluation(dc);
         }
         this.dataChannel.onmessage = (event) => {
             console.log("on message")
@@ -284,6 +364,15 @@ class DataChannel {
                     console.error('Error adding received ice candidate', e);
                 }
             }
+            else if (event.data.includes("TYPE 1")) {
+                let [action, timestamp, dummyData] = event.data.split(" - ")
+                dc.send(`ACK 1 - ${timestamp} - ${performance.now()}`)
+            }
+            else if (event.data.includes("ACK 1")) {
+                let [ack, timestamp, directStamp] = event.data.split(" - ")
+                this.bandwidthEvaluation.receiveAck(parseFloat(timestamp), parseFloat(directStamp));
+            }
+
         }
     }
     sendMessage(msg) {
@@ -298,6 +387,15 @@ class MediaTracks {
         this.audioOnly = null;
         this.dataChannel = null;
         this.screenSharing = null;
+        this.createHighQualityStream = this.createHighQualityStream.bind(this);
+        this.createLowQualityStream = this.createLowQualityStream.bind(this);
+        this.createAudioOnlyStream = this.createAudioOnlyStream.bind(this);
+        this.createScreenSharingStream = this.createScreenSharingStream.bind(this);
+        this.createDataChannelStream = this.createDataChannelStream.bind(this);
+        this.assignRemoteDescription = this.assignRemoteDescription.bind(this);
+        this.acceptDataChannelStream = this.acceptDataChannelStream.bind(this);
+        this.createOffer = this.createOffer.bind(this);
+        this.acceptOffer = this.acceptOffer.bind(this);
     }
     static configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
     createHighQualityStream() {
