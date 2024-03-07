@@ -228,6 +228,7 @@ class BandwidthEvaluator {
     constructor() {
         this.state = 'INIT';
         this.sentPackets = {};
+        this.pair = null;
         // Bind the methods to the instance to preserve the context
         this.sendPacket = this.sendPacket.bind(this);
         this.receiveAck = this.receiveAck.bind(this);
@@ -237,18 +238,18 @@ class BandwidthEvaluator {
         this.state = 'SENDING';
         this.timer = setTimeout(() => {
             this.finishEvaluation();
-        }, 6000);
+        }, 11000);
         const intervalId = setInterval(this.sendPacket, 1000, dataChannel);
         setTimeout(() => {
             clearInterval(intervalId);
-        }, 4000);
+        }, 10001);
     }
 
     sendPacket(dataChannel) {
         // send 3Mbps of 1460 bytes per frame.
         for (let index = 0; index <= 256; index++) {
             console.log("Current state", this.state)
-            if (this.state !== 'SENDING') return; // Use strict equality check
+            if (this.state !== 'SENDING') return;
             const timestamp = performance.now();
             const action = `TYPE 1 - ${timestamp.toString()} - `;
             const timestampByteSize = new Blob([action]).size;
@@ -259,10 +260,11 @@ class BandwidthEvaluator {
         }
     }
 
-    receiveAck(originalStamp, directStamp) {
-        if (this.state !== 'SENDING') return; // Use strict equality check
+    receiveAck(originalStamp, userId) {
+        if (this.state !== 'SENDING') return;
         const timestamp = performance.now();
-        this.sentPackets[originalStamp] = { direct: directStamp - originalStamp, rtt: timestamp - originalStamp };
+        if (!this.pair) this.pair = userId;
+        this.sentPackets[originalStamp] = { rtt: timestamp - originalStamp };
         console.log(`Received ack at ${timestamp}`);
     }
 
@@ -270,6 +272,21 @@ class BandwidthEvaluator {
         clearTimeout(this.timer);
         this.state = 'FINISHED';
         console.log('Evaluation finished');
+        const { sumRtt, countRtt, totalCount } = Object.values(this.sentPackets).reduce((acc, item) => {
+            if (item.rtt) {
+                acc.sumRtt += item.rtt;
+                acc.countRtt++;
+            }
+            acc.totalCount++;
+            return acc;
+        }, { sumRtt: 0, countRtt: 0, totalCount: 0 });
+        const avgRtt = countRtt ? sumRtt / countRtt : 0;
+        const percentageWithRtt = countRtt / totalCount;
+        const MSS = 375000; // 3Mbits
+        const averageBandwidth = MSS / (avgRtt * percentageWithRtt);
+        console.log("Average RTT:", avgRtt);
+        console.log("Percentage with RTT:", percentageWithRtt);
+        console.log("Bandwidth Estimation: ", averageBandwidth)
         console.log(this.sentPackets);
     }
 }
@@ -288,14 +305,14 @@ class PeerConnections {
         this.users.room.createDataChannelStream()
     }
     answerDataChannelOffer(peer, sdp) {
-        this.users.peer = new MediaTracks();
-        this.users.peer.acceptDataChannelStream(sdp, peer);
+        this.users[peer] = new MediaTracks();
+        this.users[peer].acceptDataChannelStream(sdp, peer);
     }
     responseFromAnswerDataChannel(user, sdp) {
         // this.users.user = Object.assign({}, this.users.room);
-        this.users.user = Object.assign(Object.create(this.users.room), this.users.room)
-        console.log(this.users.user)
-        this.users.user.assignRemoteDescription(sdp, "room");
+        this.users[user] = Object.assign(Object.create(this.users.room), this.users.room)
+        console.log(this.users[user])
+        this.users[user].assignRemoteDescription(sdp, "room");
         this.users.room = new MediaTracks();
         this.users.room.createDataChannelStream("perfect-negotiation-room");
     }
@@ -334,7 +351,7 @@ class DataChannel {
                 }
                 else if (event.data.includes("TYPE 1")) {
                     let [action, timestamp, dummyData] = event.data.split(" - ")
-                    dc.send(`ACK 1 - ${timestamp} - ${performance.now()}`)
+                    dc.send(`ACK 1 - ${timestamp} - ${self_id}`)
                 }
                 else if (event.data.includes("ACK 1")) {
                     let [ack, timestamp, directStamp] = event.data.split(" - ")
@@ -366,11 +383,11 @@ class DataChannel {
             }
             else if (event.data.includes("TYPE 1")) {
                 let [action, timestamp, dummyData] = event.data.split(" - ")
-                dc.send(`ACK 1 - ${timestamp} - ${performance.now()}`)
+                dc.send(`ACK 1 - ${timestamp} - ${self_id}`)
             }
             else if (event.data.includes("ACK 1")) {
-                let [ack, timestamp, directStamp] = event.data.split(" - ")
-                this.bandwidthEvaluation.receiveAck(parseFloat(timestamp), parseFloat(directStamp));
+                let [ack, timestamp, userId] = event.data.split(" - ")
+                this.bandwidthEvaluation.receiveAck(parseFloat(timestamp), userId);
             }
 
         }
