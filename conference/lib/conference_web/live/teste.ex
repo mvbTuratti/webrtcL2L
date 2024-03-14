@@ -10,6 +10,7 @@ defmodule ConferenceWeb.Teste do
   def handle_event(name, payload, socket) do
     IO.inspect(name)
     IO.inspect(payload)
-    {:noreply, push_event(socket, "ack", %{hash: payload["hash"]})}
+    # {:noreply, push_event(socket, "ack", %{hash: payload["hash"]})}
+    {:noreply, socket}
   end
 end
