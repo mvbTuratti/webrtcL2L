@@ -65,7 +65,7 @@ defmodule ConferenceWeb.Conference do
     end)
   end
   defp check_server_status(socket) do
-    Process.send_after(self(), :check_server_status, 15000)
+    # Process.send_after(self(), :check_server_status, 15000)
     socket
   end
 
