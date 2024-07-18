@@ -65,12 +65,13 @@ defmodule Conference.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind conference", "esbuild conference"],
+      setup: ["deps.get"],
+      # setup: ["deps.get", "assets.setup", "assets.build"],
+      # "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      # "assets.build": ["tailwind conference", "esbuild conference"],
       "assets.deploy": [
-        "tailwind conference --minify",
-        "esbuild conference --minify",
+        # "tailwind conference --minify",
+        # "esbuild conference --minify",
         "phx.digest"
       ]
     ]

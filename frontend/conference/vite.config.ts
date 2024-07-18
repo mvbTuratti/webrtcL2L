@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8080/api',
       '/socket': "ws://localhost:8080"
+      // '/socket': "wss://conference.fly.dev"
     },
   },
 })

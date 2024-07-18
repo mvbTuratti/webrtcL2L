@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && mv dist/assets/* ../../conference/priv/static/assets && mv dist/index.html ../../conference/lib/conference_web/controllers/page_html/index.html.heex",
+    "build": "tsc -b && vite build && mv dist/assets/* ../../conference/assets/test/ && mv dist/index.html ../../conference/lib/conference_web/controllers/page_html/index.html.heex",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
