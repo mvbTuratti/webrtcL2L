@@ -10,11 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@xstate/react": "^4.1.1",
     "flowbite": "^2.4.1",
     "flowbite-react": "^0.10.1",
     "phoenix": "^1.7.14",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.25.1",
+    "xstate": "^5.15.0"
   },
   "devDependencies": {
     "@types/phoenix": "^1.6.5",
