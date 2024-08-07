@@ -23,27 +23,29 @@ config :conference, ConferenceWeb.Endpoint,
   pubsub_server: Conference.PubSub,
   live_view: [signing_salt: "Nfzl/TQO"]
 
-# # Configure esbuild (the version is required)
-# config :esbuild,
-#   version: "0.17.11",
-#   conference: [
-#     args:
-#       ~w(js/index-tYzkQSdZ.js --bundle --outdir=../priv/static/assets --external:/fonts/* --external:/images/* ),
-#     cd: Path.expand("../assets", __DIR__),
-#     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
-#   ]
+# Configure esbuild (the version is required)
+config :esbuild,
+  version: "0.17.11",
+  conference: []
+  # conference: [
+  #   args:
+  #     ~w(js/index-tYzkQSdZ.js --bundle --outdir=../priv/static/assets --external:/fonts/* --external:/images/* ),
+  #   cd: Path.expand("../assets", __DIR__),
+  #   env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
+  # ]
 
-# # Configure tailwind (the version is required)
-# config :tailwind,
-#   version: "3.4.0",
-#   conference: [
-#     args: ~w(
-#       --config=tailwind.config.js
-#       --input=css/index-CbB__1dq.css
-#       --output=../priv/static/assets/index-CbB__1dq.css
-#     ),
-#     cd: Path.expand("../assets", __DIR__)
-#   ]
+# Configure tailwind (the version is required)
+config :tailwind,
+  version: "3.4.0",
+  conference: []
+  # conference: [
+  #   args: ~w(
+  #     --config=tailwind.config.js
+  #     --input=css/index-CbB__1dq.css
+  #     --output=../priv/static/assets/index-CbB__1dq.css
+  #   ),
+  #   cd: Path.expand("../assets", __DIR__)
+  # ]
 
 # Configures Elixir's Logger
 config :logger, :console,
