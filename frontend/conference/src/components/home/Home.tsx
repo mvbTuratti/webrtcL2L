@@ -5,7 +5,7 @@ function Home() {
     const [state, setState] = useState("");
     const navigate = useNavigate();
 
-    const redirectToLobby = (event) => {
+    const redirectToLobby = (event: any) => {
         event.preventDefault();
         navigate(`/lobby/${state}`, { state: { inputValue: state } });
     }

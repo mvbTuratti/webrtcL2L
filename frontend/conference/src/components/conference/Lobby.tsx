@@ -1,10 +1,11 @@
-import { useLocation } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import toggleMachine from './state-machine';
 
 function Lobby() {
-    const location = useLocation();
-    const { inputValue } = location.state || { inputValue: '' };
+    const location = useParams();
+    const inputValue = location.roomId;
     const machine = toggleMachine;
+
     return (
         <>
             <h1>Lobby</h1>
