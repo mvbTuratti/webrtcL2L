@@ -1,5 +1,9 @@
 import { useParams } from 'react-router-dom';
-import Fetcher from './state-machine.jsx';
+import { createActorContext } from '@xstate/react';
+import { fetchVideoMachine } from './state-machine';
+import VideoCamera from './VideoCamera/VideoCamera'
+
+export const VideoCameraContext = createActorContext(fetchVideoMachine);
 
 function Lobby() {
     const location = useParams();
@@ -9,7 +13,9 @@ function Lobby() {
         <>
             <h1>Lobby</h1>
             <p>Valor passado: {inputValue}</p>
-            <Fetcher onResolve={console.log}></Fetcher>
+            <VideoCameraContext.Provider>
+                <VideoCamera></VideoCamera>
+            </VideoCameraContext.Provider>            
 
         </>
     );
