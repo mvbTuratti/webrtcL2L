@@ -4,16 +4,24 @@ const VideoCamera = () => {
     const state = VideoCameraContext.useSelector((state) => state);
     const videoActorRef = VideoCameraContext.useActorRef();
     switch (state.value) {
-        case 'idle':
+        case 'start':
         return (
-            <button onClick={() => videoActorRef.send({ type: 'FETCH', mediaType: 'videoinput' })}>
+            <button onClick={() => videoActorRef.send({ type: 'FETCH', mediaType: 'video' })}>
             Search for something
             </button>
         );
-        case 'loading':
+        case 'loadingDeviceOptions':
         return <div>Searching...</div>;
-        case 'success':
-        return <div>Success! Data: {state.context.data}</div>;
+        case 'idle':
+        return (
+            <div className='flex flex-col h-max'>
+                <video autoPlay ref={(ref) => {
+                    if (ref)
+                        ref.srcObject = state.context.mediaStream;}} muted></video>
+                <button onClick={() => videoActorRef.send({ type: 'FETCH', mediaType: 'video' })}>
+                    Search for something
+                </button>
+            </div>);
         case 'failure':
         return (
             <>
