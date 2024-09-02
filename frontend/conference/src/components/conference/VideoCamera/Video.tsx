@@ -1,0 +1,29 @@
+import { useRef, useEffect, memo } from 'react';
+
+interface VideoProp {
+    mediaStream: MediaStream,
+}
+
+// Memoized Video Component
+const Video = memo(({ mediaStream } : VideoProp) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && mediaStream) {
+      videoRef.current.srcObject = mediaStream;
+    }
+  }, [mediaStream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      className="top-0 left-0"
+      width="400"
+      height="268"
+      muted
+    />
+  );
+});
+
+export default Video;
