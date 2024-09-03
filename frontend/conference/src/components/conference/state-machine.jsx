@@ -1,10 +1,16 @@
 import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sendParent, enqueueActions, createMachine } from 'xstate';
 
 
-const getUserPermission = async ({camera, microphone}) => {
-  const audio = microphone && true;
-  const video = camera && { width: { ideal: 400},height: { ideal: 268 }}
-  console.log("get user permission", audio, video)
+const getUserPermission = async ({camera, microphone, micId, videoId}) => {
+  const audio = microphone ? {
+    ...(micId ? { deviceId: { exact: micId } } : {})
+  } : false;
+  const video = camera ? {
+    width: { ideal: 400 },
+    height: { ideal: 268 },
+    ...(videoId && videoId !== 'default' ? { deviceId: { exact: videoId } } : {})
+  } : false;
+  // console.log("get user permission", audio, video)
   return await navigator.mediaDevices.getUserMedia({audio: audio, video: video});
 }
 
@@ -13,11 +19,9 @@ function removedDevice(params) {
 }
 
 async function listDeviceOptions(mediaType) {
-  console.log("options...")
   if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
     const options = {audio: mediaType === 'audio', video: mediaType === 'video'}
     const devices = await navigator.mediaDevices.enumerateDevices();
-    console.log("LIST DEVICE OPTIONS", devices)
     return { devices: devices.filter(device => device.kind === `${mediaType}input`), ...options}
   }
   raise({ type: 'failedToLoadOptions' });
@@ -75,7 +79,7 @@ export const fetchVideoMachine = setup(
     },
     actors: {
       askForDeviceOptions: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)),
-      askForUserPermission: fromPromise(({ input }) => getUserPermission({camera: input.camera, microphone: input.microphone})),
+      askForUserPermission: fromPromise(({ input }) => getUserPermission({camera: input.camera, microphone: input.microphone, micId: input.micId, videoId: input.cameraId})),
     },
   }
 ).createMachine({
@@ -85,6 +89,8 @@ export const fetchVideoMachine = setup(
     camera: true,
     microphone: true,
     mediaStream: undefined,
+    micId: "default",
+    cameraId: "default",
     noDevices: false,
     error: undefined,
   },
@@ -115,13 +121,37 @@ export const fetchVideoMachine = setup(
             enqueue.sendTo('devices' , { type: "options.fetch", mediaType: event.mediaType })
           }))
         },
-        "painel.removedDevices": {
+        "painel.removedMic": {
           actions: assign({
-            microphone: ({ event }) => event.mediaType !== 'microphone',
-            camera: ({ event }) => event.mediaType !== 'camera'
+            microphone: ({ event }) => false,
           }),
           target: 'start'
-        }
+        },
+        "painel.removedCamera": {
+          actions: assign({
+            camera: ({ event }) => false,
+          }),
+          target: 'start'
+        },
+        "painel.changeMedia": {
+          actions: assign({
+            micId: ({ event, context }) => event.device === 'audio' ? event.mediaId : context.micId,
+            cameraId: ({event, context}) => event.device === 'video' ? event.mediaId : context.cameraId
+          }),
+          target: 'start'
+        },
+        "painel.addCamera": {
+          actions: assign({
+            camera: ({ event }) => true,
+          }),
+          target: 'start'
+        },
+        "painel.addMic": {
+          actions: assign({
+            microphone: ({ event }) => true,
+          }),
+          target: 'start'
+        },
       },
     },
     noAvailableDevices: {

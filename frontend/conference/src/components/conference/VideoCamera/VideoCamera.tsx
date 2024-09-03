@@ -9,11 +9,15 @@ interface VideoCameraProps {
 function watchPermissionRemoval(type: string, videoRef: any) {
     navigator.permissions.query({ name: type as PermissionName })
         .then((permissionStatus) => {
-            console.log("permissionStatus ", permissionStatus);
             const handleChange = (event: Event) => {
                 const target = event.target as PermissionStatus;
                 if (target?.state === 'denied') {
-                    videoRef.send({ type: "painel.removedDevices", mediaType: type });
+                    if (type === 'microphone'){
+                        videoRef.send({ type: "painel.removedMic" });
+                    }
+                    else if (type === 'camera'){
+                        videoRef.send({ type: "painel.removedCamera" });
+                    }
                 }
             };
             if (!permissionStatus.onchange) {
@@ -25,7 +29,7 @@ function watchPermissionRemoval(type: string, videoRef: any) {
 const VideoCamera:React.FC<VideoCameraProps>  = ({ room } ) => {
     const state = VideoCameraContext.useSelector((state) => state);
     const videoActorRef = VideoCameraContext.useActorRef();
-    videoActorRef.subscribe(e => console.log(e.toJSON()))
+    // videoActorRef.subscribe(e => console.log(e.toJSON()))
     useEffect(() => {
         const elements: string[] = ["camera", "microphone"];
         elements.forEach((d: string) => {
@@ -57,15 +61,7 @@ const VideoCamera:React.FC<VideoCameraProps>  = ({ room } ) => {
         return (
             <div className="">
                 <div className='flex justify-center items-center'>
-                        <Controls mediaStream={state.context.mediaStream}/>
-                    {/* <div className='col-span-1'>
-                        {/* <button onClick={() => videoActorRef.send({ type: 'FETCH', mediaType: 'video' })} >
-                            Search for something
-                        </button>
-                        <button onClick={() => videoActorRef.send({ type: 'FETCH', mediaType: 'audio' })} >
-                            Search for something
-                        </button> */}
-                    {/* </div> */}
+                    <Controls mediaStream={state.context.mediaStream}/>
                 </div>
             </div>
             );
