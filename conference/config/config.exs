@@ -35,17 +35,17 @@ config :esbuild,
   # ]
 
 # Configure tailwind (the version is required)
-config :tailwind,
-  version: "3.4.0",
-  conference: []
-  # conference: [
-  #   args: ~w(
-  #     --config=tailwind.config.js
-  #     --input=css/index-CbB__1dq.css
-  #     --output=../priv/static/assets/index-CbB__1dq.css
-  #   ),
-  #   cd: Path.expand("../assets", __DIR__)
-  # ]
+# config :tailwind,
+#   version: "3.4.0",
+#   conference: []
+#   # conference: [
+#   #   args: ~w(
+#   #     --config=tailwind.config.js
+#   #     --input=css/index-CbB__1dq.css
+#   #     --output=../priv/static/assets/index-CbB__1dq.css
+#   #   ),
+#   #   cd: Path.expand("../assets", __DIR__)
+#   # ]
 
 # Configures Elixir's Logger
 config :logger, :console,

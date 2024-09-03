@@ -15,8 +15,7 @@ config :conference, ConferenceWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "Mw8zSB5rIdhGq8ScNoKlghRabAgA+6XZQ084dLkDES6ePJNKV2BKilyamX7mAU0Q",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:conference, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:conference, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:conference, ~w(--sourcemap=inline)]},
   ]
 
 # ## SSL Support
@@ -41,6 +40,14 @@ config :conference, ConferenceWeb.Endpoint,
 # If desired, both `http:` and `https:` keys can be
 # configured to run both http and https servers on
 # different ports.
+config :conference, ConferenceWeb.Endpoint,
+  http: [port: 4000],
+  https: [
+    port: 4001,
+    cipher_suite: :strong,
+    certfile: "priv/cert/selfsigned.pem",
+    keyfile: "priv/cert/selfsigned_key.pem"
+  ]
 
 # Watch static and templates for browser reloading.
 config :conference, ConferenceWeb.Endpoint,
