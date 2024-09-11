@@ -23,7 +23,7 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <NextUIProvider>
-      <main className="dark text-foreground bg-background h-[100vh] w-[100vw] flex justify-center items-center">
+      <main className="bg-default-800 text-foreground h-[100vh] w-[100vw] flex justify-center items-center overflow-hidden">
         <RouterProvider router={router} />
       </main>
     </NextUIProvider>

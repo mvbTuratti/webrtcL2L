@@ -101,10 +101,10 @@ export const fetchVideoMachine = setup(
         src: 'askForUserPermission',
         input: (({ context }) => context),
         onDone: {
-          target: 'idle',
           actions: assign({
             mediaStream: ( { event } ) => event.output,
-          })
+          }),
+          target: 'idle',
         },
         onError: {
           target: 'noAvailableDevices',

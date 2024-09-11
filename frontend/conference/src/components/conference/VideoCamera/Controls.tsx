@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { ButtonGroup} from "@nextui-org/react";
-import DeviceSelector from "./DeviceSelector";
-import ToggleActivity, { DeviceType } from './ToggleActivity'
+import DeviceSelector from "./utils/DeviceSelector";
+import ToggleActivity, { DeviceType } from './utils/ToggleActivity'
 import { VideoCameraContext } from '../Lobby'
-import Video from './Video';
+import Video from './utils/Video';
 
 interface ControlsProps {
     mediaStream: MediaStream,
@@ -29,7 +29,7 @@ const Controls = ({ mediaStream } : ControlsProps) => {
     console.log("Controls")
 
     return (
-    <div className='relative' id="control-props" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div className='h-full w-full' id="control-props" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
         <Video
             mediaStream={mediaStream}
         >
