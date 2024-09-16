@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { VideoCameraContext } from '../../Lobby'
-import { Button, button } from "@nextui-org/react";
+import { VideoCameraContext } from '../FigmaTest'
+import { Button } from "@nextui-org/react";
 import { MdMic, MdMicOff, MdVideocam, MdVideocamOff } from "react-icons/md";
 
 
@@ -36,7 +36,7 @@ const ToggleDevice = ({ type, buttonText }: Props) => {
             <Button 
             color={devicesToggle.status ?  "danger" : "default" }
             onClick={handleClick}
-            startContent={devicesToggle.status ? (devicesToggle.type === 'video' ? (<MdVideocamOff></MdVideocamOff>) : (<MdMicOff></MdMicOff>)) : (devicesToggle.type === 'video' ? (<MdVideocam></MdVideocam>) : (<MdMic></MdMic>))}
+            startContent={devicesToggle.status ? (devicesToggle.type === 'video' ? (<MdVideocamOff className='h-4 w-4'></MdVideocamOff>) : (<MdMicOff className='h-4 w-4'></MdMicOff>)) : (devicesToggle.type === 'video' ? (<MdVideocam className='h-4 w-4'></MdVideocam>) : (<MdMic className='h-4 w-4'></MdMic>))}
            >
             {devicesToggle.status ? "Desative o " : "Ative o "}{ devicesToggle.type }
            </Button>
@@ -48,15 +48,15 @@ const ToggleDevice = ({ type, buttonText }: Props) => {
             >
              {devicesToggle.status ? (
                  devicesToggle.type === 'video' ? (
-                     <MdVideocamOff></MdVideocamOff>
+                     <MdVideocamOff className='h-4 w-4'></MdVideocamOff>
                  ) : (
-                     <MdMicOff></MdMicOff>
+                     <MdMicOff className='h-4 w-4'></MdMicOff>
                  ) 
              ) : (
                  devicesToggle.type === 'video' ? (
-                     <MdVideocam></MdVideocam>
+                     <MdVideocam className='h-4 w-4'></MdVideocam>
                  ) : (
-                     <MdMic></MdMic>
+                     <MdMic className='h-4 w-4'></MdMic>
                  ) 
              )}</Button>)
         }

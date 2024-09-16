@@ -19,8 +19,8 @@ const Video = memo(({ mediaStream } : VideoProp) => {
       ref={videoRef}
       autoPlay
       className="top-0 left-0 rounded-sm"
-      width="400"
-      height="268"
+      // width="480"
+      // height="338"
       muted
     />
   );

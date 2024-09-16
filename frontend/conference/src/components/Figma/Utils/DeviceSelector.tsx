@@ -1,6 +1,6 @@
 import {Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button} from "@nextui-org/react";
 import { useState, useEffect } from 'react';
-import { VideoCameraContext } from '../../Lobby'
+import { VideoCameraContext } from '../FigmaTest'
 import { FaAngleUp } from "react-icons/fa6";
 
 

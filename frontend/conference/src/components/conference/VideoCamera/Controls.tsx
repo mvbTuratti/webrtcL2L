@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { ButtonGroup} from "@nextui-org/react";
-import DeviceSelector from "./utils/DeviceSelector";
-import ToggleActivity, { DeviceType } from './utils/ToggleActivity'
-import { VideoCameraContext } from '../Lobby'
-import Video from './utils/Video';
+import DeviceSelector from "../../Figma/Utils/DeviceSelector";
+import ToggleActivity, { DeviceType } from '../../Figma/Utils/ToggleActivity'
+// import { VideoCameraContext } from '../Lobby'
+import Video from '../../Figma/Utils/Video';
 
 interface ControlsProps {
     mediaStream: MediaStream,
@@ -13,7 +13,7 @@ interface ControlsProps {
 
 const Controls = ({ mediaStream } : ControlsProps) => {
     const [ controlsVisibility, setControlsVisibility ] = useState(true);
-    const state = VideoCameraContext.useSelector((state) => state);
+    // const state = VideoCameraContext.useSelector((state) => state);
     const handleMouseEnter = useCallback(() => {
         setTimeout(() => setControlsVisibility(true), 300);
     }, []);

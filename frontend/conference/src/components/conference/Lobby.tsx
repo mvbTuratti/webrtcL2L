@@ -1,8 +1,7 @@
 import { useParams } from 'react-router-dom';
+import ConfigHeroSection from './VideoCamera/ConfigHeroSection'
 import { createActorContext } from '@xstate/react';
 import { fetchVideoMachine } from './state-machine';
-import ConfigHeroSection from './VideoCamera/ConfigHeroSection'
-
 export const VideoCameraContext = createActorContext(fetchVideoMachine);
 
 

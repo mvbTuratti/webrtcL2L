@@ -8,6 +8,7 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import Lobby from './components/conference/Lobby.tsx';
+import Test from './components/Figma/FigmaTest.tsx'
 
 const router = createBrowserRouter([
   {
@@ -17,6 +18,10 @@ const router = createBrowserRouter([
   {
     path: "/lobby/:roomId",
     element: <Lobby></Lobby>,
+  },
+  {
+    path: "/test",
+    element: <Test></Test>
   }
 ]);
 

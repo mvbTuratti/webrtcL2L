@@ -1,10 +1,10 @@
 import { VideoCameraContext } from '../Lobby'
 import React, {useEffect} from 'react';
 // import Controls from './Controls';
-import Video from './utils/Video';
-import ToggleActivity, { DeviceType } from './utils/ToggleActivity'
+import Video from '../../Figma/Utils/Video';
+import ToggleActivity, { DeviceType } from '../../Figma/Utils/ToggleActivity'
 import { ButtonGroup, Button } from "@nextui-org/react";
-import DeviceSelector from "./utils/DeviceSelector";
+import DeviceSelector from "../../Figma/Utils/DeviceSelector";
 import NoVideoAvatar from './utils/NoVideoAvatar';
 
 interface ConfigHeroSectionProps {

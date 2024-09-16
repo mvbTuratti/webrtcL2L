@@ -2,71 +2,197 @@
 @tailwind components;
 @tailwind utilities;
 
-/* :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@layer components {
+  .all-\[unset\] {
+    all: unset;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-} */
+}
+
+:root {
+  --desktop-body-1-regular-16px-font-family: "Inter", Helvetica;
+  --desktop-body-1-regular-16px-font-size: 16px;
+  --desktop-body-1-regular-16px-font-style: normal;
+  --desktop-body-1-regular-16px-font-weight: 400;
+  --desktop-body-1-regular-16px-letter-spacing: 0.5px;
+  --desktop-body-1-regular-16px-line-height: 24px;
+  --desktop-body-1-semibold-16px-font-family: "Inter", Helvetica;
+  --desktop-body-1-semibold-16px-font-size: 16px;
+  --desktop-body-1-semibold-16px-font-style: normal;
+  --desktop-body-1-semibold-16px-font-weight: 600;
+  --desktop-body-1-semibold-16px-letter-spacing: 0.5px;
+  --desktop-body-1-semibold-16px-line-height: 24px;
+  --desktop-body-2-regular-14px-font-family: "Inter", Helvetica;
+  --desktop-body-2-regular-14px-font-size: 14px;
+  --desktop-body-2-regular-14px-font-style: normal;
+  --desktop-body-2-regular-14px-font-weight: 400;
+  --desktop-body-2-regular-14px-letter-spacing: 0.25px;
+  --desktop-body-2-regular-14px-line-height: 20px;
+  --desktop-body-2-semibold-14px-font-family: "Inter", Helvetica;
+  --desktop-body-2-semibold-14px-font-size: 14px;
+  --desktop-body-2-semibold-14px-font-style: normal;
+  --desktop-body-2-semibold-14px-font-weight: 600;
+  --desktop-body-2-semibold-14px-letter-spacing: 0.25px;
+  --desktop-body-2-semibold-14px-line-height: 20px;
+  --desktop-button-semibold-16px-font-family: "Inter", Helvetica;
+  --desktop-button-semibold-16px-font-size: 16px;
+  --desktop-button-semibold-16px-font-style: normal;
+  --desktop-button-semibold-16px-font-weight: 600;
+  --desktop-button-semibold-16px-letter-spacing: 0.5px;
+  --desktop-button-semibold-16px-line-height: 24px;
+  --desktop-caption-regular-12px-font-family: "Inter", Helvetica;
+  --desktop-caption-regular-12px-font-size: 12px;
+  --desktop-caption-regular-12px-font-style: normal;
+  --desktop-caption-regular-12px-font-weight: 400;
+  --desktop-caption-regular-12px-letter-spacing: 0.4000000059604645px;
+  --desktop-caption-regular-12px-line-height: 16px;
+  --desktop-caption-semibold-12px-font-family: "Inter", Helvetica;
+  --desktop-caption-semibold-12px-font-size: 12px;
+  --desktop-caption-semibold-12px-font-style: normal;
+  --desktop-caption-semibold-12px-font-weight: 600;
+  --desktop-caption-semibold-12px-letter-spacing: 0.4000000059604645px;
+  --desktop-caption-semibold-12px-line-height: 16px;
+  --desktop-heading-1-semibold-80px-font-family: "Inter", Helvetica;
+  --desktop-heading-1-semibold-80px-font-size: 80px;
+  --desktop-heading-1-semibold-80px-font-style: normal;
+  --desktop-heading-1-semibold-80px-font-weight: 600;
+  --desktop-heading-1-semibold-80px-letter-spacing: -1.5px;
+  --desktop-heading-1-semibold-80px-line-height: 84px;
+  --desktop-heading-2-semibold-60px-font-family: "Inter", Helvetica;
+  --desktop-heading-2-semibold-60px-font-size: 60px;
+  --desktop-heading-2-semibold-60px-font-style: normal;
+  --desktop-heading-2-semibold-60px-font-weight: 600;
+  --desktop-heading-2-semibold-60px-letter-spacing: -0.5px;
+  --desktop-heading-2-semibold-60px-line-height: 60px;
+  --desktop-heading-3-semibold-48px-font-family: "Inter", Helvetica;
+  --desktop-heading-3-semibold-48px-font-size: 48px;
+  --desktop-heading-3-semibold-48px-font-style: normal;
+  --desktop-heading-3-semibold-48px-font-weight: 600;
+  --desktop-heading-3-semibold-48px-letter-spacing: 0px;
+  --desktop-heading-3-semibold-48px-line-height: 52px;
+  --desktop-heading-4-semibold-34px-font-family: "Inter", Helvetica;
+  --desktop-heading-4-semibold-34px-font-size: 34px;
+  --desktop-heading-4-semibold-34px-font-style: normal;
+  --desktop-heading-4-semibold-34px-font-weight: 600;
+  --desktop-heading-4-semibold-34px-letter-spacing: 0.25px;
+  --desktop-heading-4-semibold-34px-line-height: 40px;
+  --desktop-heading-5-semibold-24px-font-family: "Inter", Helvetica;
+  --desktop-heading-5-semibold-24px-font-size: 24px;
+  --desktop-heading-5-semibold-24px-font-style: normal;
+  --desktop-heading-5-semibold-24px-font-weight: 600;
+  --desktop-heading-5-semibold-24px-letter-spacing: 0px;
+  --desktop-heading-5-semibold-24px-line-height: 32px;
+  --desktop-heading-6-semibold-20px-font-family: "Inter", Helvetica;
+  --desktop-heading-6-semibold-20px-font-size: 20px;
+  --desktop-heading-6-semibold-20px-font-style: normal;
+  --desktop-heading-6-semibold-20px-font-weight: 600;
+  --desktop-heading-6-semibold-20px-letter-spacing: 0.15000000596046448px;
+  --desktop-heading-6-semibold-20px-line-height: 24px;
+  --desktop-link-semibold-14px-font-family: "Inter", Helvetica;
+  --desktop-link-semibold-14px-font-size: 14px;
+  --desktop-link-semibold-14px-font-style: normal;
+  --desktop-link-semibold-14px-font-weight: 600;
+  --desktop-link-semibold-14px-letter-spacing: 0.25px;
+  --desktop-link-semibold-14px-line-height: 20px;
+  --desktop-overline-medium-10px-font-family: "Inter", Helvetica;
+  --desktop-overline-medium-10px-font-size: 10px;
+  --desktop-overline-medium-10px-font-style: normal;
+  --desktop-overline-medium-10px-font-weight: 600;
+  --desktop-overline-medium-10px-letter-spacing: 1.5px;
+  --desktop-overline-medium-10px-line-height: 16px;
+  --desktop-paragraph-18px-font-family: "Inter", Helvetica;
+  --desktop-paragraph-18px-font-size: 18px;
+  --desktop-paragraph-18px-font-style: normal;
+  --desktop-paragraph-18px-font-weight: 400;
+  --desktop-paragraph-18px-letter-spacing: 0.5px;
+  --desktop-paragraph-18px-line-height: 36px;
+  --desktop-subtitle-1-semibold-16px-font-family: "Inter", Helvetica;
+  --desktop-subtitle-1-semibold-16px-font-size: 16px;
+  --desktop-subtitle-1-semibold-16px-font-style: normal;
+  --desktop-subtitle-1-semibold-16px-font-weight: 600;
+  --desktop-subtitle-1-semibold-16px-letter-spacing: 0.15000000596046448px;
+  --desktop-subtitle-1-semibold-16px-line-height: 24px;
+  --desktop-subtitle-2-semibold-14px-font-family: "Inter", Helvetica;
+  --desktop-subtitle-2-semibold-14px-font-size: 14px;
+  --desktop-subtitle-2-semibold-14px-font-style: normal;
+  --desktop-subtitle-2-semibold-14px-font-weight: 600;
+  --desktop-subtitle-2-semibold-14px-letter-spacing: 0.10000000149011612px;
+  --desktop-subtitle-2-semibold-14px-line-height: 20px;
+  --mobile-body-1-regular-16px-font-family: "Inter", Helvetica;
+  --mobile-body-1-regular-16px-font-size: 16px;
+  --mobile-body-1-regular-16px-font-style: normal;
+  --mobile-body-1-regular-16px-font-weight: 400;
+  --mobile-body-1-regular-16px-letter-spacing: 0.5px;
+  --mobile-body-1-regular-16px-line-height: 24px;
+  --mobile-body-2-regular-14px-font-family: "Inter", Helvetica;
+  --mobile-body-2-regular-14px-font-size: 14px;
+  --mobile-body-2-regular-14px-font-style: normal;
+  --mobile-body-2-regular-14px-font-weight: 400;
+  --mobile-body-2-regular-14px-letter-spacing: 0.25px;
+  --mobile-body-2-regular-14px-line-height: 20px;
+  --mobile-button-semibold-16px-font-family: "Inter", Helvetica;
+  --mobile-button-semibold-16px-font-size: 16px;
+  --mobile-button-semibold-16px-font-style: normal;
+  --mobile-button-semibold-16px-font-weight: 600;
+  --mobile-button-semibold-16px-letter-spacing: 0.5px;
+  --mobile-button-semibold-16px-line-height: 24px;
+  --mobile-caption-regular-12px-font-family: "Inter", Helvetica;
+  --mobile-caption-regular-12px-font-size: 12px;
+  --mobile-caption-regular-12px-font-style: normal;
+  --mobile-caption-regular-12px-font-weight: 400;
+  --mobile-caption-regular-12px-letter-spacing: 0.4000000059604645px;
+  --mobile-caption-regular-12px-line-height: 16px;
+  --mobile-h1-semibold-72px-font-family: "Inter", Helvetica;
+  --mobile-h1-semibold-72px-font-size: 72px;
+  --mobile-h1-semibold-72px-font-style: normal;
+  --mobile-h1-semibold-72px-font-weight: 600;
+  --mobile-h1-semibold-72px-letter-spacing: -1.5px;
+  --mobile-h1-semibold-72px-line-height: 76px;
+  --mobile-h2-semibold-48px-font-family: "Inter", Helvetica;
+  --mobile-h2-semibold-48px-font-size: 48px;
+  --mobile-h2-semibold-48px-font-style: normal;
+  --mobile-h2-semibold-48px-font-weight: 600;
+  --mobile-h2-semibold-48px-letter-spacing: -0.5px;
+  --mobile-h2-semibold-48px-line-height: 52px;
+  --mobile-h3-semibold-40px-font-family: "Inter", Helvetica;
+  --mobile-h3-semibold-40px-font-size: 40px;
+  --mobile-h3-semibold-40px-font-style: normal;
+  --mobile-h3-semibold-40px-font-weight: 600;
+  --mobile-h3-semibold-40px-letter-spacing: 0px;
+  --mobile-h3-semibold-40px-line-height: 44px;
+  --mobile-h4-semibold-28px-font-family: "Inter", Helvetica;
+  --mobile-h4-semibold-28px-font-size: 28px;
+  --mobile-h4-semibold-28px-font-style: normal;
+  --mobile-h4-semibold-28px-font-weight: 600;
+  --mobile-h4-semibold-28px-letter-spacing: 0.25px;
+  --mobile-h4-semibold-28px-line-height: 32px;
+  --mobile-h5-semibold-24px-font-family: "Inter", Helvetica;
+  --mobile-h5-semibold-24px-font-size: 24px;
+  --mobile-h5-semibold-24px-font-style: normal;
+  --mobile-h5-semibold-24px-font-weight: 600;
+  --mobile-h5-semibold-24px-letter-spacing: 0px;
+  --mobile-h5-semibold-24px-line-height: 28px;
+  --mobile-h6-semibold-20px-font-family: "Inter", Helvetica;
+  --mobile-h6-semibold-20px-font-size: 20px;
+  --mobile-h6-semibold-20px-font-style: normal;
+  --mobile-h6-semibold-20px-font-weight: 600;
+  --mobile-h6-semibold-20px-letter-spacing: 0.15000000596046448px;
+  --mobile-h6-semibold-20px-line-height: 24px;
+  --mobile-overline-medium-10px-font-family: "Inter", Helvetica;
+  --mobile-overline-medium-10px-font-size: 10px;
+  --mobile-overline-medium-10px-font-style: normal;
+  --mobile-overline-medium-10px-font-weight: 600;
+  --mobile-overline-medium-10px-letter-spacing: 1.5px;
+  --mobile-overline-medium-10px-line-height: 16px;
+  --mobile-subtitle-1-medium-16px-font-family: "Inter", Helvetica;
+  --mobile-subtitle-1-medium-16px-font-size: 16px;
+  --mobile-subtitle-1-medium-16px-font-style: normal;
+  --mobile-subtitle-1-medium-16px-font-weight: 500;
+  --mobile-subtitle-1-medium-16px-letter-spacing: 0.15000000596046448px;
+  --mobile-subtitle-1-medium-16px-line-height: 24px;
+  --mobile-subtitle-2-medium-14px-font-family: "Inter", Helvetica;
+  --mobile-subtitle-2-medium-14px-font-size: 14px;
+  --mobile-subtitle-2-medium-14px-font-style: normal;
+  --mobile-subtitle-2-medium-14px-font-weight: 500;
+  --mobile-subtitle-2-medium-14px-letter-spacing: 0.10000000149011612px;
+  --mobile-subtitle-2-medium-14px-line-height: 20px;
+}
