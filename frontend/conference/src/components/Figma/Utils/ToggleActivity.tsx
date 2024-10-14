@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { VideoCameraContext } from '../FigmaTest'
 import { Button } from "@nextui-org/react";
 import { MdMic, MdMicOff, MdVideocam, MdVideocamOff } from "react-icons/md";
@@ -15,11 +15,29 @@ interface Props {
     type: DeviceType,
     buttonText?: string 
 }
-
 const ToggleDevice = ({ type, buttonText }: Props) => {
     const videoActorRef = VideoCameraContext.useActorRef();
+    const [ disabledVideo, setDisabledVideo ] = useState<boolean>(false)
+    const [ disabledMic, setDisabledMic ] = useState<boolean>(false)
     const [ devicesToggle, setDevicesToggle ] = useState<Device>({type: type, status: true})
-
+    const state = VideoCameraContext.useSelector((state) => state);
+    useEffect(() => {
+        const devicesSub = videoActorRef.subscribe((snapshot) => {
+            if (snapshot.context.permissionRemovedCamera) {
+                setDisabledVideo(true)
+            } else {
+                setDisabledVideo(false)
+            }
+            if (snapshot.context.permissionRemovedMic) {
+                setDisabledMic(true)
+            } else {
+                setDisabledMic(false)
+            }
+        } )
+        return () => {
+            devicesSub.unsubscribe();
+        };
+    }, [videoActorRef, state])
     const handleClick = () => {
         setDevicesToggle({...devicesToggle, status: !devicesToggle.status})
         let event = ""
@@ -33,6 +51,8 @@ const ToggleDevice = ({ type, buttonText }: Props) => {
 
     return (<>
         {buttonText ? (
+            ((devicesToggle.type === 'video' && !disabledVideo) || (devicesToggle.type !== 'video' && !disabledMic) )
+            &&
             <Button 
             color={devicesToggle.status ?  "danger" : "default" }
             onClick={handleClick}
@@ -41,6 +61,8 @@ const ToggleDevice = ({ type, buttonText }: Props) => {
             {devicesToggle.status ? "Desative o " : "Ative o "}{ devicesToggle.type }
            </Button>
         ) : (
+            ((devicesToggle.type === 'video' && !disabledVideo) || (devicesToggle.type !== 'video' && !disabledMic) )
+            &&
              <Button 
              isIconOnly
              color={devicesToggle.status ?  "danger" : "default" }

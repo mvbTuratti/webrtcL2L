@@ -4,7 +4,8 @@ import VideoControls from './VideoControls'
 import { VideoCameraContext } from '../FigmaTest'
 import { Input } from "@nextui-org/react";
 import ButtonJoinMeeting from './ButtonJoinMeeting';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { DetailsFilled } from '../Joining/Joining'
 
 function watchPermissionRemoval(type: string, videoRef: any) {
   navigator.permissions.query({ name: type as PermissionName })
@@ -25,11 +26,17 @@ function watchPermissionRemoval(type: string, videoRef: any) {
           }
       });
 }
+interface Permission {
+  room?: string;
+}
 
-const Permission = (): JSX.Element => {
+const Permission = ({ room } : Permission): JSX.Element => {
+  const [buttonState, setButtonState] = useState("loading")
+  const [testState, setTestState] = useState(false)
   const state = VideoCameraContext.useSelector((state) => state);
   const videoActorRef = VideoCameraContext.useActorRef();
   // videoActorRef.subscribe(e => console.log(e.toJSON()))
+  console.log(room)
   useEffect(() => {
       const elements: string[] = ["camera", "microphone"];
       if ('permissions' in navigator ) {
@@ -50,8 +57,19 @@ const Permission = (): JSX.Element => {
         }
       };
   }, []);
+  const handleInputName = (name : string) => {
+    return (name.length > 2) ? setButtonState("done") : setButtonState("loading")
+  }
+  const handleClickJoinRoom = () => {
+    setTestState(!testState)
+  }
   return (
-    <div className="relative w-screen h-screen bg-black flex items-center justify-center">
+    ( testState ? (
+      <>
+        <DetailsFilled></DetailsFilled>
+      </>
+    ) : (
+      <div className="relative w-screen h-screen bg-black flex items-center justify-center">
       <div className="inline-flex flex-col items-center gap-10 ">
         <div className="inline-flex flex-col items-center gap-2 relative flex-[0_0_auto]">
           <div className="relative w-fit mt-[-1.00px] [font-family:'Inter-SemiBold',Helvetica] font-semibold text-[#eff0fa] text-[34px] tracking-[0.25px] leading-10 whitespace-nowrap">
@@ -75,13 +93,15 @@ const Permission = (): JSX.Element => {
             )
             }
             <div className="flex items-start gap-4 relative self-stretch w-full flex-[0_0_auto]">
-              <Input type="text" size="lg" placeholder='Digite seu nome'></Input>
-              <ButtonJoinMeeting state="loading"/>
+              <Input onChange={(e) => handleInputName(e.target.value)} type="text" size="lg" placeholder='Digite seu nome'></Input>
+              <ButtonJoinMeeting state={buttonState} onClickParent={handleClickJoinRoom} />
             </div>
           </div>
         </div>
       </div>
     </div>
+    ))
+    
   );
 };
 
