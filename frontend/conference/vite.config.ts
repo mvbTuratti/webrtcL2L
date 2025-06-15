@@ -4,11 +4,14 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(),basicSsl()],
+  plugins: [react({ include: /\.(js|jsx|ts|tsx)$/ }),basicSsl()],
   server: {
     proxy: {
       '/api': 'http://localhost:8080/api',
-      '/socket': "ws://localhost:8080"
+      '/socket':{
+        ws: true,
+        target: "ws://localhost:4000",
+      } 
       // '/socket': "wss://conference.fly.dev"
     },
   },

@@ -6,6 +6,7 @@ import { Input } from "@nextui-org/react";
 import ButtonJoinMeeting from './ButtonJoinMeeting';
 import { useEffect, useState } from 'react';
 import { DetailsFilled } from '../Joining/Joining'
+import Test from '../Test'
 
 function watchPermissionRemoval(type: string, videoRef: any) {
   navigator.permissions.query({ name: type as PermissionName })
@@ -28,13 +29,16 @@ function watchPermissionRemoval(type: string, videoRef: any) {
 }
 interface Permission {
   room?: string;
+  // user?: string;
 }
 
 const Permission = ({ room } : Permission): JSX.Element => {
   const [buttonState, setButtonState] = useState("loading")
   const [testState, setTestState] = useState(false)
+  const [user, setUser] = useState("")
   const state = VideoCameraContext.useSelector((state) => state);
   const videoActorRef = VideoCameraContext.useActorRef();
+  
   // videoActorRef.subscribe(e => console.log(e.toJSON()))
   console.log(room)
   useEffect(() => {
@@ -57,8 +61,14 @@ const Permission = ({ room } : Permission): JSX.Element => {
         }
       };
   }, []);
+
   const handleInputName = (name : string) => {
-    return (name.length > 2) ? setButtonState("done") : setButtonState("loading")
+    if (name.length > 2) {
+      setButtonState("done")
+      setUser(name)
+    } else {
+      setButtonState("loading")
+    }
   }
   const handleClickJoinRoom = () => {
     setTestState(!testState)
@@ -66,6 +76,7 @@ const Permission = ({ room } : Permission): JSX.Element => {
   return (
     ( testState ? (
       <>
+        <Test room={room} user={user}></Test>
         <DetailsFilled></DetailsFilled>
       </>
     ) : (

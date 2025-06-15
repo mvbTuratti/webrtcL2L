@@ -9,16 +9,17 @@ import {
 } from "react-router-dom";
 // import Lobby from './components/conference/Lobby.tsx';
 import Lobby from './components/Figma/FigmaTest.tsx'
+import TestC from './components/Figma/TestC.tsx'
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <App></App>,
   },
-  // {
-  //   path: "/lobby/:roomId",
-  //   element: <Lobby></Lobby>,
-  // },
+  {
+    path: "/test",
+    element: <TestC></TestC>,
+  },
   {
     path: "/lobby/:roomId",
     element: <Lobby></Lobby>

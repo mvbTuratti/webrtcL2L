@@ -1,0 +1,140 @@
+import { createMachine, assign, spawnChild, enqueueActions } from 'xstate';
+import createWebRTCConnectionMachine  from './webrtcConnectionMachine';
+
+export const webrtcManagerMachine = createMachine({
+  id: 'webrtcManager',
+  initial: 'idle',
+  context: {
+    // Mapping: { user: { [pairType]: actorRef } }
+    webrtcs: {},
+    placeholder: undefined
+  },
+  states: {
+    idle: {
+      on: {
+        CURRENT_USERS_SDP: {
+          actions: assign(({event, context, spawn }) => {
+            if (!event.data || event.data.length === 0) {
+              // first member, create placeholder
+              return {
+                ...context,
+              }
+            }
+            let newWebrtcs = { ...context.webrtcs };
+            event.data.forEach(pair => {
+              const { user, sdp } = pair;
+              const pairType = "data"
+              if (!sdp || sdp.trim() === '') {
+                const webrtcActor = spawn(
+                  createWebRTCConnectionMachine(user, pairType, 'instigator'),
+                  { name: `webrtc-${user}-${pairType}` }
+                );
+                newWebrtcs[user] = {
+                  ...(newWebrtcs[user] || {}),
+                  [pairType]: webrtcActor
+                };
+                // TODO: Add callback to parent
+              } else {
+                const webrtcActor = spawn(
+                  createWebRTCConnectionMachine(user, pairType, 'receiver', sdp),
+                  { name: `webrtc-${user}-${pairType}` }
+                );
+                newWebrtcs[user] = {
+                  ...(newWebrtcs[user] || {}),
+                  [pairType]: webrtcActor
+                };
+                // TODO: add callback to parent
+              }
+              console.log("WEBRTC SPAWNED CHILD", newWebrtcs)
+            });
+            return {
+              ...context,
+              webrtcs: newWebrtcs
+            };
+          })
+        },
+        CREATE_CONNECTION: {
+          actions: assign(({context, event, spawn}) => {
+            const { user, pairType } = event;
+            // Spawn a new webrtc connection actor
+            const webrtcActor = spawn(
+              createWebRTCConnectionMachine(user, pairType),
+              { name: `webrtc-${user}-${pairType}` }
+            );
+            return {
+              webrtcs: {
+                ...context.webrtcs,
+                [user]: {
+                  ...(context.webrtcs[user] || {}),
+                  [pairType]: webrtcActor
+                }
+              }
+            };
+          })
+        },
+        CREATE_PLACEHOLDER_CONNECTION: {
+          actions: assign(({context, spawn}) => {
+            // Spawn a new webrtc connection actor
+            const webrtcActor = spawn(
+              createWebRTCConnectionMachine('placeholder', 'data', 'instigator'),{ name: `webrtc-placeholder-data` })
+            return {
+              ...context,
+              placeholder: webrtcActor
+              }
+            }
+          )
+        },
+        "child.PUSH_PARTIAL_ICE_CANDIDATE": {
+          actions: enqueueActions(({ enqueue, event }) => {
+              enqueue.sendParent(
+                  event
+              );
+            }
+          ),
+        },
+        "child.SDP_VALUE": {
+          actions: enqueueActions(({ enqueue, event }) => {
+              console.log("EVENT IN PARENT", event)
+              enqueue.sendParent(
+                { type: 'child.SDP_VALUE', message: {
+                  sdp: event.message.sdp,
+                  format: event.message.format
+              }}
+              );
+            }
+          ),
+        },
+        UPDATE_CONNECTION: {
+          actions: (context, event) => {
+            const { user, pairType, data } = event;
+            const actor = context.webrtcs[user]?.[pairType];
+            if (actor) {
+              actor.send({ type: 'UPDATE', data });
+            }
+          }
+        },
+        DISCONNECT_CONNECTION: {
+          actions: (context, event) => {
+            const { user, pairType } = event;
+            const actor = context.webrtcs[user]?.[pairType];
+            if (actor) {
+              actor.send('DISCONNECT');
+            }
+          }
+        },
+        RELAY_VIDEO: {
+          actions: (context, event) => {
+            const { fromPair, toPair, fromType, toType } = event;
+            const sourceActor = context.webrtcs[fromPair]?.[fromType];
+            const targetActor = context.webrtcs[toPair]?.[toType];
+            if (sourceActor && targetActor) {
+              targetActor.send({ type: 'UPDATE', data: { relayFrom: fromPair } });
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
+export default webrtcManagerMachine;

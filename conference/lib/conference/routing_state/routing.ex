@@ -95,7 +95,10 @@ defmodule Conference.RoutingState.Routing do
   @spec upsert_connection_quality(pid(), [%{source: String.t(), target: String.t(), weight: pos_integer()|pos_integer()}]) :: pid()
   def upsert_connection_quality(pid, new_weights), do: GenServer.call(pid, {:update_connection_quality, new_weights})
 
-  @spec leave_stream(pid(), :high_quality|:low_quality, String.t(), String.t()) :: {:ok, [{:ok, String.t(), String.t()}|{:missing_parent, String.t(), String.t()}]}
+  @spec leave_stream(pid(), :high_quality|:low_quality|:audio_only, String.t(), String.t()) :: {:ok, [{:ok, String.t(), String.t()}|{:missing_parent, String.t(), String.t()}]}
   def leave_stream(pid, :high_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :high_quality, streamer, viewer})
   def leave_stream(pid, :low_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :low_quality, streamer, viewer})
+  # def leave_stream(pid, :audio_only, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :audio_only, streamer, viewer})
+
+  # def remove_user(pid, user), do: GenServer.call(pid, {:remove_user, user})
 end

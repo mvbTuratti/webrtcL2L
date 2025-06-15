@@ -4,17 +4,19 @@ defmodule ConferenceWeb.RoomSocket do
   channel "room:*", ConferenceWeb.Channel.Room
 
   @impl true
-  def connect(params, socket) do
-    IO.puts("\n\n HEEERE")
-    IO.inspect(params)
-    IO.inspect(socket)
+  def connect(_params, socket) do
+    IO.puts("connect /2")
+    # IO.inspect(params)
+    # IO.inspect(socket)
     {:ok, socket}
   end
   @impl true
-  def connect(params, socket, connect_info) do
-    IO.inspect(params)
-    IO.inspect(socket)
-    IO.inspect(connect_info)
+  def connect(params, socket, _connect_info) do
+    IO.puts("connect /3")
+    socket = assign(socket, :user, params["user"])
+            |> assign(:sdp, params["sdp"])
+    # IO.inspect(params, label: "Params in connect/3")
+    # IO.inspect(socket)
     {:ok, socket}
   end
 
@@ -29,6 +31,6 @@ defmodule ConferenceWeb.RoomSocket do
   #
   # Returning `nil` makes this socket anonymous.
   @impl true
-  def id(_socket), do: nil
+  def id(socket), do: "user_socket:#{socket.assigns[:user]}"
 
 end

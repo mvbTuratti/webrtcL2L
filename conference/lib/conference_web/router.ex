@@ -19,6 +19,7 @@ defmodule ConferenceWeb.Router do
 
     get "/", PageController, :home
     live "/conference", Conference
+    get "/*path", PageController, :home
   end
 
   # Other scopes may use custom stacks.

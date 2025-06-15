@@ -5,12 +5,6 @@ import Home from './components/home/Home'
 // import { Socket } from 'phoenix';
 
 function App() {
-  // const socket = new Socket('/socket');
-  // socket.connect();
-  // const channel = socket.channel(`room:test`, {})
-  // channel.join()
-  //   .receive("ok", resp => { console.log("Joined successfully", resp) })
-  //   .receive("error", resp => { console.log("Unable to join", resp) })
 
   return (
     <>
