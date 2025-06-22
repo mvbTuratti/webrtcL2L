@@ -22,13 +22,14 @@ defmodule ConferenceWeb.ChannelCase do
       # Import conveniences for testing with channels
       import Phoenix.ChannelTest
       import ConferenceWeb.ChannelCase
-
+      import ConferenceWeb.Channel.ClientHarness
       # The default endpoint for testing
       @endpoint ConferenceWeb.Endpoint
     end
   end
 
   setup _tags do
+    ConferenceWeb.Channel.ClientHarness.setup_harness()
     :ok
   end
 end

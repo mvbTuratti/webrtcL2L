@@ -34,7 +34,7 @@ defmodule ConferenceWeb.Channel.RoomTest do
   #     room1 = generate_string()
   #     socket1 = join_room("user1", "sdp 1", room1)
   #     push(socket1, "ice_candidate", %{"to" => "placeholder", "ice" => %{
-  #       "candidate": "candidate:3227376277 1 udp 2122262783 2001:1284:f508:69a7:575:4407:f28b:6e66 61460 typ host generation 0 ufrag VDHh network-id 2 network-cost 10",
+  #       "candidate": "candidate:3227376277 1 udp 2122262783 typ host generation 0 ufrag VDHh network-id 2 network-cost 10",
   #       "sdpMid": "0",
   #       "sdpMLineIndex": 0,
   #       "usernameFragment": "VDHh",

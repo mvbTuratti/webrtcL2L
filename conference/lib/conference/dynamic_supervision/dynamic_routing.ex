@@ -1,6 +1,6 @@
 defmodule Conference.DynamicSupervision.DynamicRouting do
   alias Conference.RoutingState.Routing
-  alias Conference.SdpTable.PeerFinding
+  alias Conference.SdpTable.Peers
 
   def get_routing_pid(room) do
     Registry.lookup(Conference.RouterRegistry, "recommendation:" <> room)
@@ -12,7 +12,6 @@ defmodule Conference.DynamicSupervision.DynamicRouting do
     pid
   end
   defp create_or_return_routing([{pid, _}], _), do: pid
-
   def get_peer_finding_pid(room) do
     Registry.lookup(Conference.RouterRegistry, "peerfinding:" <> room)
     |> create_or_return_peer_finding(room)
@@ -20,7 +19,7 @@ defmodule Conference.DynamicSupervision.DynamicRouting do
 
   defp create_or_return_peer_finding([], room) do
     {:ok, pid} =
-      DynamicSupervisor.start_child(Conference.RouterSupervisor, {PeerFinding, name: via_tuple("peerfinding:" <> room)})
+      DynamicSupervisor.start_child(Conference.RouterSupervisor, {Peers, name: via_tuple("peerfinding:" <> room)})
     pid
   end
   defp create_or_return_peer_finding([{pid, _}], _), do: pid

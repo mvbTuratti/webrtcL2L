@@ -12,23 +12,25 @@ defmodule Conference.SdpTable.Peers do
 
   @doc """
   Idempotently join a negotiation and fetch pending negotiations.
-
-  Parameters:
-    - hash: a unique identifier for this negotiation entry.
-    - sdp: the session description.
-    - channel_pid: the caller’s channel PID.
-    - connection_type: a string indicating the type of connection.
-
-  Behavior:
-    1. If an entry for this hash doesn’t exist in pending or active, it is added.
-    2. All pending negotiations (except the caller’s own) are fetched and marked as active
-       by associating them with the caller’s channel PID.
-    3. Returns a map of matched negotiations.
+  * hash: a unique identifier for this negotiation entry.
+  * sdp: the session description.
+  * channel_pid: the caller’s channel PID.
+  * connection_type: a string indicating the type of connection.
+  1. If an entry for this hash doesn’t exist in pending or active, it is added.
+  2. All pending negotiations (except the caller’s own) are fetched and marked as active
+      by associating them with the caller’s channel PID.
+  3. Returns a map of matched negotiations.
   """
-  def join_negotiation(pid \\ __MODULE__, hash, sdp, channel_pid, connection_type) do
-    GenServer.call(pid, {:join_negotiation, hash, sdp, channel_pid, connection_type})
+  def join_negotiation(pid \\ __MODULE__, hash, sdp, channel_pid, connection_type \\ "data", refill \\ false, name \\ "user", opts \\ []) do
+    GenServer.call(pid, {:join_negotiation, hash, sdp, channel_pid, connection_type, refill, name, opts})
   end
 
+  @doc """
+
+  """
+  def request_media_specific(pid \\ __MODULE__, pid_user, media_type, pid_self) do
+    GenServer.call(pid, {:request_media, pid_user, media_type, pid_self})
+  end
   @doc """
   Updates the ICE candidate for the negotiation entry identified by hash.
 
@@ -46,6 +48,10 @@ defmodule Conference.SdpTable.Peers do
     GenServer.call(pid, {:delete_entry, hash})
   end
 
+  def remove_user(pid \\ __MODULE__, pid_user) do
+    GenServer.call(pid, {:delete_user, pid_user})
+  end
+
   # Server callbacks
 
   @impl true
@@ -54,68 +60,24 @@ defmodule Conference.SdpTable.Peers do
   end
 
   @impl true
-  def handle_call({:join_negotiation, hash, sdp, channel_pid, connection_type}, _from, state) do
-    state = maybe_insert_entry(hash, sdp, channel_pid, connection_type, state)
-
-    {matches, new_state} =
-      case connection_type do
-        "data" -> try_auto_match(hash, state, channel_pid)
-        _ -> {nil, state}
-      end
-
-    {:reply, matches || %{}, new_state}
-  end
-
-  defp maybe_insert_entry(hash, sdp, channel_pid, connection_type, state) do
-    if Map.has_key?(state.pending, hash) or Map.has_key?(state.active, hash) do
-      state
-    else
-      entry = %{
-        sdp: sdp,
-        ice: [],
-        creator_pid: channel_pid,
-        connection_type: connection_type,
-        partner_pid: nil
-      }
-      %{state | pending: Map.put(state.pending, hash, entry)}
+  def handle_call({:request_media, pid_user, media_type, pid_self}, _from, state) do
+    case does_user_have_media?(pid_user, media_type, state) do
+      {found_hash, _value} ->
+        {popped_entry, new_pending_map} = Map.pop(state.pending, found_hash)
+        updated_with_self_pid = %{popped_entry | partner_pid: pid_self}
+        new_state = %{state | pending: new_pending_map, active: Map.put(state.active, found_hash, updated_with_self_pid)}
+        {:reply, %{found_hash => updated_with_self_pid}, new_state, @timeout}
+      nil ->
+        {:reply, nil, state, @timeout}
     end
   end
-
-  # Adjusted auto matching: only move other pending entries to active.
-  defp try_auto_match(joining_hash, state, joining_channel_pid) do
-    {to_match, remaining_pending} =
-      state.pending
-      |> Enum.split_with(fn {key, entry} ->
-        key != joining_hash and entry.connection_type == "data"
-      end)
-      |> then(fn {match_list, rest} -> {Map.new(match_list), Map.new(rest)} end)
-
-    if map_size(to_match) > 0 do
-      active_matches =
-        Enum.into(to_match, %{}, fn {key, entry} ->
-          # Set partner_pid to the joining peer's PID
-          {key, Map.put(entry, :partner_pid, joining_channel_pid)}
-        end)
-
-      # Do not move the joining entry; leave it in pending.
-      new_state = %{
-        state
-        | pending: Map.put(remaining_pending, joining_hash, state.pending[joining_hash]),
-          active: Map.merge(state.active, active_matches)
-      }
-      {active_matches, new_state}
-    else
-      {nil, state}
-    end
-  end
-
   @impl true
   def handle_call({:update_ice, hash, new_ice}, _from, state) do
     cond do
       Map.has_key?(state.active, hash) ->
         entry = state.active[hash]
         if entry.partner_pid do
-          send(entry.partner_pid, {:ice_update, hash, new_ice})
+          send(entry.partner_pid, {:private_message, %{protocol: :ice_update, hash: hash, ice: new_ice}})
           {:reply, :ok, state}
         else
           updated_entry = Map.update!(entry, :ice, fn ice -> [new_ice | ice] end)
@@ -130,8 +92,20 @@ defmodule Conference.SdpTable.Peers do
         {:reply, :ok, %{state | pending: new_pending}}
 
       true ->
-        {:reply, {:error, :not_found}, state}
+        {:reply, {:error, :not_found}, state, @timeout}
     end
+  end
+  @impl true
+  def handle_call({:join_negotiation, hash, sdp, channel_pid, connection_type, refill, name, opts}, _from, state) do
+    state = maybe_insert_entry(hash, sdp, channel_pid, connection_type, state, name)
+
+    {matches, new_state} =
+      case connection_type do
+        "data" -> try_auto_match(hash, state, channel_pid, refill, opts)
+        _ -> {nil, state}
+      end
+
+    {:reply, matches || %{}, new_state, @timeout}
   end
 
 
@@ -141,11 +115,11 @@ defmodule Conference.SdpTable.Peers do
     cond do
       Map.has_key?(state.pending, hash) ->
         new_pending = Map.delete(state.pending, hash)
-        {:reply, :ok, %{state | pending: new_pending}}
+        {:reply, :ok, %{state | pending: new_pending}, @timeout}
 
       Map.has_key?(state.active, hash) ->
         new_active = Map.delete(state.active, hash)
-        {:reply, :ok, %{state | active: new_active}}
+        {:reply, :ok, %{state | active: new_active}, @timeout}
 
       true ->
         {:reply, {:error, :not_found}, state, @timeout}
@@ -153,7 +127,94 @@ defmodule Conference.SdpTable.Peers do
   end
 
   @impl true
+  def handle_call({:delete_user, pid_to_delete}, _from, state) do
+    {pending_hashes, state_after_pending} =
+      Enum.reduce(state.pending, {[], state}, fn {hash, entry}, {hashes_acc, state_acc} ->
+        if entry.creator_pid == pid_to_delete do
+          new_pending_map = Map.delete(state_acc.pending, hash)
+          {[hash | hashes_acc], %{state_acc | pending: new_pending_map}}
+        else
+          {hashes_acc, state_acc}
+        end
+      end)
+    {all_removed_hashes, final_state} =
+      Enum.reduce(state.active, {pending_hashes, state_after_pending}, fn {hash, entry}, {hashes_acc, state_acc} ->
+        if entry.creator_pid == pid_to_delete or entry.partner_pid == pid_to_delete do
+          new_active_map = Map.delete(state_acc.active, hash)
+          {[hash | hashes_acc], %{state_acc | active: new_active_map}}
+        else
+          {hashes_acc, state_acc}
+        end
+      end)
+    {:reply, all_removed_hashes, final_state, @timeout}
+  end
+  defp does_user_have_media?(pid_to_check, type_to_check, state) do
+    Enum.find(state.pending, fn {_hash, entry} ->
+      entry.creator_pid == pid_to_check and entry.connection_type == type_to_check
+    end)
+  end
+
+  defp maybe_insert_entry(hash, sdp, channel_pid, connection_type, state, name) do
+    if Map.has_key?(state.pending, hash) or Map.has_key?(state.active, hash) do
+      state
+    else
+      entry = %{
+        sdp: sdp,
+        ice: [],
+        creator_pid: channel_pid,
+        connection_type: connection_type,
+        partner_pid: nil,
+        name: name
+      }
+      %{state | pending: Map.put(state.pending, hash, entry)}
+    end
+  end
+
+  defp try_auto_match(joining_hash, state, joining_channel_pid, true, opts) do
+    # Case is a refill, send the current joined colleagues and check if there's any non-seen before
+    existing_partners = opts
+    {to_match, remaining_pending} =
+      state.pending
+      |> Enum.split_with(fn {key, entry} ->
+        is_data_channel = entry.connection_type == "data"
+        is_not_myself = key != joining_hash
+        is_a_new_partner = entry.name not in existing_partners
+        is_data_channel and is_not_myself and is_a_new_partner
+      end)
+      |> then(fn {match_list, rest} -> {Map.new(match_list), Map.new(rest)} end)
+    change_state(map_size(to_match), to_match, remaining_pending, joining_channel_pid, state)
+  end
+  defp try_auto_match(joining_hash, state, joining_channel_pid, _refill, _opts) do
+    # Case that is not a refill but a first joiner, consume all pending "data"
+    {to_match, remaining_pending} =
+      state.pending
+      |> Enum.split_with(fn {key, entry} ->
+        key != joining_hash and entry.connection_type == "data"
+      end)
+      |> then(fn {match_list, rest} -> {Map.new(match_list), Map.new(rest)} end)
+    change_state(map_size(to_match), to_match, remaining_pending, joining_channel_pid, state)
+  end
+  defp change_state(waiting_data_connections, _match,_rem,_joining_channel,state) when waiting_data_connections <= 0, do: {nil, state}
+  defp change_state(_map_size, to_match, remaining_pending, joining_channel_pid, state) do
+    active_matches =
+      Enum.into(to_match, %{}, fn {key, entry} ->
+        # Set partner_pid to the joining peer PID
+        {key, Map.put(entry, :partner_pid, joining_channel_pid)}
+      end)
+    new_state = %{
+      state
+      | pending: remaining_pending,
+        active: Map.merge(state.active, active_matches)
+    }
+    {active_matches, new_state}
+  end
+
+  @impl true
   def handle_info(:timeout, state) do
     {:stop, :normal, state}
+  end
+
+  def generate_hash(user) do
+    "#{user}-#{:erlang.unique_integer([:positive, :monotonic])}"
   end
 end
