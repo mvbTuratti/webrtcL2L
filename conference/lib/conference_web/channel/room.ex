@@ -40,6 +40,7 @@ defmodule ConferenceWeb.Channel.Room do
     |> assign(:sdp_pairs, current_users)
     |> assign(:room, room)
     |> assign(:pairs, users)
+    |> assign(:hash, hash)
 
     warn_users_they_should_create_new_sdps(users, socket.assigns.room, socket.assigns.user)
     # IO.inspect(socket, label: "room.ex: User #{socket.id} - Room #{room} // after changes to subscription")
@@ -84,6 +85,7 @@ defmodule ConferenceWeb.Channel.Room do
     end)
     push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
     push(socket, "pairs", %{"pairs" => socket.assigns.pairs})
+    push(socket, "join_hash", %{"hash" => socket.assigns.hash})
     {:noreply, socket}
   end
   def handle_info({:user_left, data}, socket) do
@@ -92,7 +94,9 @@ defmodule ConferenceWeb.Channel.Room do
       Map.delete(hashes, hash)
     end)
     push(socket, "user_left",%{"user" => data.name, "hashes" => data.hashes})
-    {:noreply, assign(socket, :sdp_pairs, current_hashes)}
+    users = socket.assigns.pairs |> Enum.filter(fn entry -> entry != data.name end)
+    socket = assign(socket, :sdp_pairs, current_hashes) |> assign(:pairs, users)
+    {:noreply, socket}
   end
   def handle_info({:update_data_channel_sdp, %{users_affected: users, from: from}}, socket) do
     IO.inspect({:handle_info_in_pid, self(), user: socket.assigns.user, from: from}, label: "BROADCAST RECIPIENT")
@@ -136,11 +140,26 @@ defmodule ConferenceWeb.Channel.Room do
     Peers.update_ice(hash, ice)
     {:noreply, socket}
   end
+  def handle_in("new_webrtc", %{"sdp" => sdp}, socket) do
+    hash = Peers.generate_hash(socket.assigns.user)
+    peerfinding_pid = socket.assigns.peerfinding_pid
+    current_users = Peers.join_negotiation(peerfinding_pid, hash, sdp, self(), "data", true, socket.assigns.user, socket.assigns.pairs)
+    sdp_pairs = Enum.reduce(socket.assigns.sdp_pairs, [],fn {hash, %{name: user, sdp: sdp, ice: ice}}, acc ->
+      [%{hash: hash, user: user, sdp: sdp, ice: ice}  | acc]
+    end)
+    push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
+    push(socket, "join_hash", %{"hash" => hash})
+    users = Enum.reduce(current_users, [], fn {_key, %{name: user}}, acc ->
+      [ user | acc ]
+    end)
+    push(socket, "pairs", %{"pairs" => users})
+    socket = assign(socket, :users, socket.assigns.users ++ users) |> assign(:sdp_pairs, Map.merge(socket.assigns.sdp_pairs, current_users))
+    {:noreply, socket}
+  end
   def handle_in("presence_diff", something, socket) do
     IO.inspect(something, label: "HERE IN BROADCASTS")
     {:noreply, socket}
   end
-
   def handle_in(protocol, data, socket) do
     IO.inspect(protocol, label: "Uncaught protocol")
     IO.inspect(data, label: "Uncaught protocol")
