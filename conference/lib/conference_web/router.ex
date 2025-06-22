@@ -14,20 +14,6 @@ defmodule ConferenceWeb.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/", ConferenceWeb do
-    pipe_through :browser
-
-    get "/", PageController, :home
-    live "/conference", Conference
-    get "/*path", PageController, :home
-  end
-
-  # Other scopes may use custom stacks.
-  # scope "/api", ConferenceWeb do
-  #   pipe_through :api
-  # end
-
-  # Enable LiveDashboard in development
   if Application.compile_env(:conference, :dev_routes, :prod) do
     # If you want to use the LiveDashboard in production, you should put
     # it behind authentication and allow only admins to access it.
@@ -41,5 +27,11 @@ defmodule ConferenceWeb.Router do
 
       live_dashboard "/dashboard", metrics: ConferenceWeb.Telemetry
     end
+  end
+  scope "/", ConferenceWeb do
+    pipe_through :browser
+
+    get "/", PageController, :home
+    get "/*path", PageController, :home
   end
 end
