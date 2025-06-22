@@ -78,12 +78,11 @@ export const fetchVideoMachine = setup(
         SHARE_SCREEN: 'startingScreenShare',
       },
     },
-    reacquiringUserMedia: { /* ...código existente... */ },
+    reacquiringUserMedia: {},
     startingScreenShare: {
         invoke: {
             src: 'askForScreenSharePermission',
             onDone: {
-                // Ao conseguir o stream, vá para o estado 'sharing'
                 target: 'sharing',
                 actions: assign({
                     screenStream: ({ event }) => event.output,
@@ -93,9 +92,7 @@ export const fetchVideoMachine = setup(
             onError: { target: 'idle' }
         }
     },
-    // **NOVO ESTADO 'SHARING' DEDICADO**
     sharing: {
-        // Ao entrar neste estado, adicionamos o listener
         entry: assign({
             screenStream: ({ context, self }) => {
                 const screenTrack = context.screenStream.getVideoTracks()[0];
@@ -118,7 +115,7 @@ export const fetchVideoMachine = setup(
             }
         }
     },
-    noAvailableDevices: { /* ...código existente... */ }
+    noAvailableDevices: {}
   },
 });
 
@@ -131,7 +128,6 @@ async function listDeviceOptions(mediaType) {
     return Promise.reject(new Error('Media devices not available.'));
 }
 
-// **CORREÇÃO AQUI**: Definição completa da máquina de estado filha 'deviceOptions'
 const deviceOptions = setup({
   actors: {
     askForDeviceOptions: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)),
@@ -176,8 +172,6 @@ const deviceOptions = setup({
   }
 });
 
-
-// Máquina de estado principal
 export const fetchVideoMachine = setup(
   {
     actions: {
@@ -304,7 +298,6 @@ export const fetchVideoMachine = setup(
         invoke: {
             src: 'askForScreenSharePermission',
             onDone: {
-                // Ao conseguir o stream, vá para o estado 'sharing'
                 target: 'sharing',
                 actions: assign({
                     screenStream: ({ event }) => event.output,
@@ -314,9 +307,7 @@ export const fetchVideoMachine = setup(
             onError: { target: 'idle' }
         }
     },
-    // **NOVO ESTADO 'SHARING' DEDICADO**
     sharing: {
-        // Ao entrar neste estado, adicionamos o listener
         entry: assign({
             screenStream: ({ context, self }) => {
                 const screenTrack = context.screenStream.getVideoTracks()[0];

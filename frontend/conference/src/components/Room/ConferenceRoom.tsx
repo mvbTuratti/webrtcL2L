@@ -23,9 +23,8 @@ const ScreenShareView: React.FC<{ stream: MediaStream }> = ({ stream }) => {
   );
 };
 
-// **NOVAS CONSTANTES DE PAGINAÇÃO**
-const REMOTE_PER_PAGE_GRID = 3; // 3 remotos + você = 4 na grade
-const REMOTE_PER_PAGE_BAR = 4;  // 4 remotos na barra de apresentação
+const REMOTE_PER_PAGE_GRID = 3;
+const REMOTE_PER_PAGE_BAR = 4; 
 
 const ConferenceRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -40,18 +39,15 @@ const ConferenceRoom: React.FC = () => {
     { id: 7, name: 'Julia' }, { id: 8, name: 'Mateus' },
   ];
 
-  // Estados de paginação separados para cada modo
   const [gridPage, setGridPage] = useState(0);
   const [barPage, setBarPage] = useState(0);
 
-  // Lógica de paginação para o MODO GRADE
   const gridTotalPages = Math.ceil(mockParticipants.length / REMOTE_PER_PAGE_GRID);
   const gridParticipantsToRender = mockParticipants.slice(
     gridPage * REMOTE_PER_PAGE_GRID,
     (gridPage + 1) * REMOTE_PER_PAGE_GRID
   );
   
-  // Lógica de paginação para a BARRA DE APRESENTAÇÃO
   const barTotalPages = Math.ceil(mockParticipants.length / REMOTE_PER_PAGE_BAR);
   const barParticipantsToRender = mockParticipants.slice(
     barPage * REMOTE_PER_PAGE_BAR,
@@ -62,9 +58,8 @@ const ConferenceRoom: React.FC = () => {
 
   if (isSharingScreen && screenStream) {
     return (
-      // MODO DE APRESENTAÇÃO
       <div className="w-screen h-screen bg-gray-900 flex flex-col">
-        {/* Barra superior de participantes */}
+        {}
         <div className="w-full bg-black p-2 flex-shrink-0 flex items-center justify-center space-x-2">
           <div className="flex-shrink-0 w-40 h-auto">
             <LocalParticipantTile name={userName} mediaStream={camera ? userStream : undefined} isSharingScreen={false} />
@@ -96,7 +91,6 @@ const ConferenceRoom: React.FC = () => {
     );
   }
 
-  // MODO DE GRADE
   return (
     <div className="w-screen h-screen bg-gray-900 flex flex-col items-center p-4">
       <h1 className="text-3xl text-white font-bold flex-shrink-0 my-4">
