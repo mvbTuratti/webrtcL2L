@@ -2,6 +2,7 @@ defmodule ConferenceWeb.RoutingTest do
   alias Conference.RoutingState.Routing
   use ConferenceWeb.ConnCase, async: true
 
+
   describe "create_stream/3" do
     setup do
       {:ok, room_pid} = Routing.start_link([])
@@ -117,6 +118,47 @@ defmodule ConferenceWeb.RoutingTest do
       room_pid = Routing.upsert_connection_quality(state[:room], [%{source: "ciclano", target: "zeze", weight: 1}])
       assert {:ok, "ciclano"} = Routing.join_stream(room_pid, :high_quality,"fulano","zeze")
       assert {:ok, [{:missing_streamer, "zeze", "fulano"}, {:ok, "beltrano", "fulano"}]} = Routing.leave_stream(room_pid, :high_quality, "fulano", "ciclano")
+    end
+  end
+  describe "remove_user/2" do
+    setup do
+      {:ok, room_pid} = Routing.start_link([])
+      base_connections = [
+        %{source: "streamerA", target: "viewerB", weight: 1},
+        %{source: "viewerB", target: "viewerC", weight: 1},
+        %{source: "streamerA", target: "viewerC", weight: 10},
+        %{source: "streamerD", target: "viewerC", weight: 1}
+      ]
+      room_pid = Routing.upsert_connection_quality(room_pid, base_connections)
+      Routing.create_stream(room_pid, :high_quality, "streamerA")
+      Routing.create_stream(room_pid, :high_quality, "streamerD")
+      # A -> B -> C
+      {:ok, "streamerA"} = Routing.join_stream(room_pid, :high_quality, "streamerA", "viewerB")
+      {:ok, "viewerB"} = Routing.join_stream(room_pid, :high_quality, "streamerA", "viewerC")
+      {:ok, "streamerD"} = Routing.join_stream(room_pid, :high_quality, "streamerD", "viewerC")
+      {:ok, room: room_pid}
+    end
+    test "when relayer user leaves, children get suggestions", %{room: room_pid} do
+      state_before = :sys.get_state(room_pid)
+      stream_a_graph_before = state_before.high_quality["streamerA"]
+      assert [%{v1: "viewerB"}] = Graph.in_edges(stream_a_graph_before, "viewerC")
+      assert {:ok, [{:ok, "viewerC", "streamerA", "streamerA"}]} == Routing.remove_user(room_pid, "viewerB")
+      state_after = :sys.get_state(room_pid)
+      stream_a_graph_after = state_after.high_quality["streamerA"]
+      refute Graph.has_vertex?(stream_a_graph_after, "viewerB")
+      assert [%{v1: "streamerA"}] = Graph.in_edges(stream_a_graph_after, "viewerC")
+      refute Graph.has_vertex?(state_after.connection_quality, "viewerB")
+    end
+    @tag :pending
+    test "when user is removed his stream is deleted", %{room: room_pid} do
+      state_before = :sys.get_state(room_pid)
+      assert Map.has_key?(state_before.high_quality, "streamerD")
+      assert Graph.has_vertex?(state_before.high_quality["streamerD"], "viewerC")
+      {:ok, recommendations} = Routing.remove_user(room_pid, "streamerD")
+      assert [] = recommendations
+      state_after = :sys.get_state(room_pid)
+      refute Map.has_key?(state_after.high_quality, "streamerD")
+      refute Graph.has_vertex?(state_after.connection_quality, "streamerD")
     end
   end
 end
