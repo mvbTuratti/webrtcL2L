@@ -66,7 +66,7 @@ defmodule Conference.RoutingState.Routing do
   @impl true
   def handle_call({:remove_user, user_to_remove}, _from, state) do
     {state_after_viewer_removal, all_recommendations} =
-      Enum.reduce([:high_quality, :low_quality, :audio_only], {state, %{"high_quality" => [], "low_quality" => [], "audio_only" => []}},
+      Enum.reduce([:high_quality, :low_quality, :audio_only], {state, %{high_quality: [], low_quality: [], audio_only: []}},
       fn stream_type, {current_state_acc, all_recs_acc} ->
         streams_of_type = Map.get(current_state_acc, stream_type)
         {updated_streams_as_kv_list, new_recommendations_for_type} =
@@ -79,9 +79,9 @@ defmodule Conference.RoutingState.Routing do
                   {status, updated_graph, recommendation} = Recommendation.join_viewer(graph_acc, streamer, viewer, incoming_references)
                   case status do
                     :ok ->
-                      {updated_graph, [{"ok", streamer,recommendation} | recs_acc]}
+                      {updated_graph, [{:ok, streamer,recommendation} | recs_acc]}
                     :missing_streamer ->
-                      {updated_graph, [{"missing_source", streamer, ""} | recs_acc]}
+                      {updated_graph, [{:missing_source, streamer, ""} | recs_acc]}
                   end
                 end)
               {{streamer, final_graph}, inner_recs_acc ++ recommendations}
@@ -106,9 +106,9 @@ defmodule Conference.RoutingState.Routing do
       incoming_references = get_incoming_quality_streams_of_user(connection_quality, viewer)
       {status, graph, recommendation} = Recommendation.join_viewer(graph, streamer, viewer, incoming_references)
       case status do
-        :missing_streamer -> {graph, [{"missing_source", viewer, streamer} | recommendations ]}
+        :missing_streamer -> {graph, [{:missing_source, viewer, streamer} | recommendations ]}
         :ok ->
-          {graph, [{"ok", viewer, recommendation} | recommendations ]}
+          {graph, [{:ok, viewer, recommendation} | recommendations ]}
       end
     end)
   end

@@ -5,6 +5,7 @@ defmodule ConferenceWeb.Channel.Room do
   alias Conference.SdpTable.Peers
   alias Conference.DynamicSupervision.DynamicRouting
   # intercept ["presence_diff"]
+  @available_types ["high", "low", "audio"]
 
   defp get_stream_type(type) do
     Map.get(%{"high" => :high_quality, "low" => :low_quality, "audio" => :audio_only}, type, :high_quality)
@@ -110,7 +111,7 @@ defmodule ConferenceWeb.Channel.Room do
       Map.delete(hashes, hash)
     end)
     push(socket, "user_left",%{"user" => data.name, "hashes" => data.hashes})
-    users = socket.assigns.pairs |> Enum.filter(fn {:missing_streamer, viewer, streamer} -> entry != data.name end)
+    users = socket.assigns.pairs |> Enum.filter(fn user -> user != data.name end)
     socket = assign(socket, :sdp_pairs, current_hashes) |> assign(:pairs, users)
     {:noreply, socket}
   end
@@ -120,10 +121,14 @@ defmodule ConferenceWeb.Channel.Room do
     {:noreply, socket}
   end
   def handle_info({:get_new_streamer, %{type: type, stream: stream_user, recommendations: recommendation}}, socket) do
-    IO.inspect({:handle_info_in_pid, self(), user: socket.assigns.user, from: from}, label: "BROADCAST NEW STREAMER RECIPIENT")
-    recommendations = Enum.filter(recommendation, fn {status, viewer, streamer} -> viewer == socket.assings.user end)
-    if length(recommendations) > 0 do
-      push(socket, "get_new_souces_of_stream", %{type: type, stream: stream_user, recommendations: recommendation})
+    IO.inspect({:handle_info_in_pid, self(), socket.assigns.user}, label: "BROADCAST NEW STREAMER RECIPIENT")
+    if type in @available_types do
+      recommendations = Enum.filter(recommendation, fn {status, viewer, streamer} -> viewer == socket.assings.user end)
+      if length(recommendations) > 0 do
+        push(socket, "get_new_souces_of_stream", %{type: type, stream: stream_user, recommendations: recommendation})
+      end
+    else
+      IO.inspect(%{type: type, stream: stream_user, recommendations: recommendation}, label: "ERROR")
     end
     {:noreply, socket}
   end
@@ -140,7 +145,7 @@ defmodule ConferenceWeb.Channel.Room do
   end
   def handle_info({:private_message, %{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}}, socket) do
     IO.inspect(%{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}, label: "Received message from user")
-    push(socket, "finish_webrtc", %{"hash" => hash, "ice" => new_ice, "sdp" => sdp})
+    push(socket, "finish_webrtc", %{"hash" => hash, "ice" => ice, "sdp" => sdp})
     {:noreply, socket}
   end
   @doc "Test-only callback to update transport and reply to the caller."
@@ -160,6 +165,10 @@ defmodule ConferenceWeb.Channel.Room do
 
   # Direct messages from client
   # General data connection
+  def handle_in("presence_diff", broadcast, socket) do
+    IO.inspect(broadcast, label: "HERE")
+    {:noreply, socket}
+  end
   def handle_in("negotiation_response", %{"sdp" => sdp, "hash" => hash , "ice" => ice}, socket) do
     case Map.get(socket.assigns.sdp_pairs, hash) do
       nil -> {:noreply, socket}
@@ -196,12 +205,9 @@ defmodule ConferenceWeb.Channel.Room do
     socket = assign(socket, :users, socket.assigns.users ++ users) |> assign(:sdp_pairs, Map.merge(socket.assigns.sdp_pairs, current_users))
     {:noreply, socket}
   end
-  def handle_in("presence_diff", something, socket) do
-    IO.inspect(something, label: "HERE IN BROADCASTS")
-    {:noreply, socket}
-  end
   def handle_in("connection_quality", %{"target" => target, "weight" => weight}, socket) do
     router = socket.assings.routing_pid
+    # create_stream_for_user
     Routing.upsert_connection_quality(router, [%{source: socket.assings.user, target: target, weight: weight}])
     {:noreply, socket}
   end
@@ -213,21 +219,36 @@ defmodule ConferenceWeb.Channel.Room do
     {:noreply, socket}
   end
   def handle_in("add_stream", %{type: type}, socket) do
-    router = socket.assings.routing_pid
-    Routing.create_stream(router, type, socket.assigns.user)
-    {:noreply, socket}
+    cond do
+      type in @available_types ->
+        router = socket.assings.routing_pid
+        create_stream_for_user(router, type, socket.assigns.user)
+        {:reply, :ok , socket}
+      true ->
+        {:reply, :error, socket}
+    end
   end
   def handle_in("request_recommendation", %{type: type, stream: stream_user}, socket) do
-    router = socket.assings.routing_pid
-    {result, recommendation} = Routing.join_stream(router, type, stream_user, socket.assigns.user)
-    {:reply, :ok, recommendation, socket}
+    cond do
+      type in @available_types ->
+        router = socket.assings.routing_pid
+        {result, recommendation} = Routing.join_stream(router, get_stream_type(type), stream_user, socket.assigns.user)
+        {:reply, :ok, recommendation, socket}
+      true ->
+        {:reply, :error, "invalid type", socket}
+    end
   end
   def handle_in("leave_stream", %{type: type, stream: stream_user}, socket) do
-    router = socket.assings.routing_pid
-    {result, recommendation} = Routing.leave_stream(router, type, stream_user, socket.assigns.user)
-    PubSub.broadcast_from(Conference.PubSub, self(), room,
-              {:get_new_streamer, %{type: type, stream: stream_user, recommendations: recommendation}})
-    {:reply, :ok, recommendation, socket}
+    cond do
+      type in @available_types ->
+        router = socket.assings.routing_pid
+        {result, recommendation} = Routing.leave_stream(router, get_stream_type(type), stream_user, socket.assigns.user)
+        PubSub.broadcast_from(Conference.PubSub, self(), socket.assigns.room,
+                  {:get_new_streamer, %{type: type, stream: stream_user, recommendations: recommendation}})
+        {:reply, :ok, recommendation, socket}
+      true ->
+        {:reply, :error, "invalid type", socket}
+    end
   end
 
   # Recomendations

@@ -65,6 +65,31 @@ defmodule ConferenceWeb.Channel.RomSingleUserTest do
       assert_received_push(client1, "sdp_pairs", %{"sdp_pairs" => []})
       assert_received_push(client1, "pairs", %{"pairs" => []})
     end
+    test "Client can update ICE" do
+      room = generate_string()
+      room_topic = "room:" <> room
+      {:ok, client1} = start_client(@endpoint)
+      {:ok, something, socket1} =
+        socket(ConferenceWeb.RoomSocket, "user1", %{user: "user1", sdp: "sdp 1"})
+        |> subscribe_and_join(ConferenceWeb.Channel.Room, room_topic)
+      :ok = adopt_socket(client1, socket1)
+      assert_received_push(client1, "pairs", %{"pairs" => []})
+      assert_received_push(client1, "sdp_pairs", %{"sdp_pairs" => []})
+      join_hash_message = pop_received_push!(client1, "join_hash")
+      assert %{"hash" => received_hash} = join_hash_message.payload
+      assert is_binary(received_hash)
+      assert String.starts_with?(received_hash, "user1-")
+      socket_state = get_socket(client1)
+      peers_pid = socket_state.assigns.peerfinding_pid
+      initial_peers_state = :sys.get_state(peers_pid)
+      [{user1_hash, _pending_data}] = Map.to_list(initial_peers_state.pending)
+      assert initial_peers_state.pending[user1_hash].ice == []
+      ice_payload = %{"hash" => user1_hash, "ice" => "candidate:12345"}
+      ConferenceWeb.Channel.ClientHarness.push(client1, "ice_update", ice_payload)
+      Process.sleep(50)
+      final_peers_state = :sys.get_state(peers_pid)
+      assert final_peers_state.pending[user1_hash].ice == ["candidate:12345"]
+    end
   end
 
   defp flush_pushes(client_pid) do

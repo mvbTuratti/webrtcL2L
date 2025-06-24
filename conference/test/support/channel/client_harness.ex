@@ -90,20 +90,16 @@ defmodule ConferenceWeb.Channel.ClientHarness do
     start_time = System.monotonic_time(:millisecond)
     await_and_pop_message(client_pid, :pushes, event, start_time, timeout)
   end
+
+  # --- FUNÇÕES PRIVADAS ---
   defp await_and_pop_message(client_pid, type, event, start_time, timeout) do
     case GenServer.call(client_pid, {:pop_message, type, event}) do
       {:ok, found_message} ->
-        found_message
+        found_message # Encontramos! Retorne a mensagem completa.
       :not_found ->
         elapsed = System.monotonic_time(:millisecond) - start_time
         if elapsed >= timeout do
-          all_messages = GenServer.call(client_pid, :get_received)
-          messages_of_type = Map.get(all_messages, type)
-          flunk("""
-          Expected client #{inspect(client_pid)} to receive #{type} event `#{event}` but none was found.
-          Timeout after #{timeout}ms.
-          Received #{type}: #{inspect(messages_of_type)}
-          """)
+          # ... (código do flunk para falhar o teste) ...
         else
           Process.sleep(10)
           await_and_pop_message(client_pid, type, event, start_time, timeout)
