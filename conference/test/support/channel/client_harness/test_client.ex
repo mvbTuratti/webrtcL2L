@@ -56,7 +56,11 @@ defmodule ConferenceWeb.Channel.ClientHarness.TestClient do
   end
   @impl true
   def handle_call({:pop_message, type, event}, _from, state) do
-    messages = Map.get(state, type)
+    messages =
+      case type do
+        :pushes -> state.received_pushes
+        :broadcasts -> state.received_broadcasts
+      end
     index = Enum.find_index(messages, &(&1.event == event))
     if index do
       {found_message, remaining_messages} = List.pop_at(messages, index)

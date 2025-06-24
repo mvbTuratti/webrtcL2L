@@ -37,8 +37,8 @@ defmodule Conference.SdpTable.Peers do
   If the entry is active (i.e. already matched and with a consumer channel PID),
   the ICE diff is sent directly to that PID. Otherwise, the diff is appended to the stored list.
   """
-  def update_ice(pid \\ __MODULE__, hash, new_ice) do
-    GenServer.call(pid, {:update_ice, hash, new_ice})
+  def update_ice(pid \\ __MODULE__, hash, new_ice, user_pid) do
+    GenServer.call(pid, {:update_ice, hash, new_ice, user_pid})
   end
 
   @doc """
@@ -72,26 +72,32 @@ defmodule Conference.SdpTable.Peers do
     end
   end
   @impl true
-  def handle_call({:update_ice, hash, new_ice}, _from, state) do
+  def handle_call({:update_ice, hash, new_ice, user_pid}, _from, state) do
+    IO.inspect({hash, new_ice}, label: "Here in handle call")
     cond do
       Map.has_key?(state.active, hash) ->
         entry = state.active[hash]
-        if entry.partner_pid do
-          send(entry.partner_pid, {:private_message, %{protocol: :ice_update, hash: hash, ice: new_ice}})
-          {:reply, :ok, state}
-        else
-          updated_entry = Map.update!(entry, :ice, fn ice -> [new_ice | ice] end)
-          new_active = Map.put(state.active, hash, updated_entry)
-          {:reply, :ok, %{state | active: new_active}}
+        cond do
+          entry.partner_pid != user_pid ->
+              IO.inspect({entry.partner_pid}, label: "Sending message for ICE update")
+              send(entry.partner_pid, {:private_message, %{protocol: :ice_update, hash: hash, ice: new_ice}})
+              {:reply, {:ok, :success}, state, @timeout}
+          entry.creator_pid != user_pid ->
+              IO.inspect({entry.creator_pid}, label: "Sending message for ICE update")
+              send(entry.creator_pid, {:private_message, %{protocol: :ice_update, hash: hash, ice: new_ice}})
+              {:reply, {:ok, :success}, state, @timeout}
         end
 
       Map.has_key?(state.pending, hash) ->
+        IO.inspect(state.pending[hash], label: "Updating pending entry")
         entry = state.pending[hash]
         updated_entry = Map.update!(entry, :ice, fn ice -> [new_ice | ice] end)
         new_pending = Map.put(state.pending, hash, updated_entry)
-        {:reply, :ok, %{state | pending: new_pending}}
+        IO.inspect(new_pending, label: "New pending entry")
+        {:reply, {:ok, :success}, %{state | pending: new_pending}, @timeout}
 
       true ->
+        IO.inspect("ERROR in handle call of PEERS ICE UPDATE")
         {:reply, {:error, :not_found}, state, @timeout}
     end
   end
@@ -122,7 +128,7 @@ defmodule Conference.SdpTable.Peers do
         {:reply, :ok, %{state | active: new_active}, @timeout}
 
       true ->
-        {:reply, {:error, :not_found}, state, @timeout}
+        {:reply, :error, state, @timeout}
     end
   end
 

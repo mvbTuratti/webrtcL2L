@@ -30,7 +30,7 @@ defmodule ConferenceWeb.Channel.RoomTwoUsersTest do
       assert_received_push(client1, "new_data_webrtc_required", %{})
     end
     @tag :pending
-    test "Check two clients" do
+    test "Client can update ICE" do
       room = generate_string()
       room_topic = "room:" <> room
       {:ok, client1} = start_client(@endpoint)
@@ -38,18 +38,19 @@ defmodule ConferenceWeb.Channel.RoomTwoUsersTest do
         socket(ConferenceWeb.RoomSocket, "user1", %{user: "user1", sdp: "sdp 1"})
         |> subscribe_and_join(ConferenceWeb.Channel.Room, room_topic)
       :ok = adopt_socket(client1, socket1)
-      flush_pushes(client1)
-      {:ok, client2} = start_client(@endpoint)
-      {:ok, something2, socket2} =
-        socket(ConferenceWeb.RoomSocket, "user2", %{user: "user2", sdp: "sdp 1"})
-        |> subscribe_and_join(ConferenceWeb.Channel.Room, room_topic)
-      :ok = adopt_socket(client2, socket2)
-      IO.inspect(%{something: something, socket: socket1}, label: "socket 1")
-      IO.inspect(%{something: something2, socket: socket2}, label: "socket 2")
-      assert false
-      # broadcast_message = {:update_data_channel_sdp, %{users_affected: ["user1"], from: "user2"}}
-      # send(socket1.channel_pid, broadcast_message)
-      # assert_received_push(client1, "new_data_webrtc_required", %{})
+      assert_received_push(client1, "pairs", %{"pairs" => []})
+      assert_received_push(client1, "sdp_pairs", %{"sdp_pairs" => []})
+      assert_received_push(client1, "join_hash", %{"hash" => "user1-1"})
+      socket_state = get_socket(client1)
+      peers_pid = socket_state.assigns.peerfinding_pid
+      initial_peers_state = :sys.get_state(peers_pid)
+      [{user1_hash, _pending_data}] = Map.to_list(initial_peers_state.pending)
+      assert initial_peers_state.pending[user1_hash].ice == []
+      ice_payload = %{"hash" => user1_hash, "ice" => "candidate:12345"}
+      ConferenceWeb.Channel.ClientHarness.push(client1, "ice_update", ice_payload)
+      Process.sleep(50)
+      final_peers_state = :sys.get_state(peers_pid)
+      assert final_peers_state.pending[user1_hash].ice == ["candidate:12345"]
     end
     # test "First user should receive an update for negotiations" do
     #   room = generate_string()

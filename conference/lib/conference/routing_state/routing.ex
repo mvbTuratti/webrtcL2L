@@ -63,12 +63,50 @@ defmodule Conference.RoutingState.Routing do
         {:reply, {:ok, recommendations}, new_state, @timeout}
     end
   end
+  @impl true
+  def handle_call({:remove_user, user_to_remove}, _from, state) do
+    {state_after_viewer_removal, all_recommendations} =
+      Enum.reduce([:high_quality, :low_quality, :audio_only], {state, %{high_quality: [], low_quality: [], audio_only: []}},
+      fn stream_type, {current_state_acc, all_recs_acc} ->
+        streams_of_type = Map.get(current_state_acc, stream_type)
+        {updated_streams_as_kv_list, new_recommendations_for_type} =
+          Enum.map_reduce(streams_of_type, [], fn {streamer, graph}, inner_recs_acc ->
+            if Graph.has_vertex?(graph, user_to_remove) and streamer != user_to_remove do
+              {graph_without_viewer, affected_users} = Recommendation.remove_viewer(graph, user_to_remove)
+              {final_graph, recommendations} =
+                Enum.reduce(affected_users, {graph_without_viewer, []}, fn viewer, {graph_acc, recs_acc} ->
+                  incoming_references = get_incoming_quality_streams_of_user(current_state_acc.connection_quality, viewer)
+                  {status, updated_graph, recommendation} = Recommendation.join_viewer(graph_acc, streamer, viewer, incoming_references)
+                  case status do
+                    :ok ->
+                      {updated_graph, [{:ok, streamer,recommendation} | recs_acc]}
+                    :missing_streamer ->
+                      {updated_graph, [{:missing_source, streamer, ""} | recs_acc]}
+                  end
+                end)
+              {{streamer, final_graph}, inner_recs_acc ++ recommendations}
+            else
+              {{streamer, graph}, inner_recs_acc}
+            end
+          end)
+        updated_streams = Map.new(updated_streams_as_kv_list)
+        state_with_updated_streams = Map.put(current_state_acc, stream_type, updated_streams)
+        {state_with_updated_streams, Map.put(all_recs_acc, stream_type, new_recommendations_for_type)}
+      end)
+    state_after_streamer_removal =
+      Enum.reduce([:high_quality, :low_quality, :audio_only], state_after_viewer_removal, fn stream_type, acc_state ->
+        Map.update!(acc_state, stream_type, &Map.delete(&1, user_to_remove))
+      end)
+    new_connection_quality = Graph.delete_vertex(state_after_streamer_removal.connection_quality, user_to_remove)
+    final_state = Map.put(state_after_streamer_removal, :connection_quality, new_connection_quality)
+    {:reply, {:ok, all_recommendations}, final_state, @timeout}
+  end
   defp _get_new_recommendation_for_users(graph, connection_quality, list_of_affected_users, streamer) do
     Enum.reduce(list_of_affected_users, {graph, []}, fn (viewer, {graph, recommendations}) ->
       incoming_references = get_incoming_quality_streams_of_user(connection_quality, viewer)
       {status, graph, recommendation} = Recommendation.join_viewer(graph, streamer, viewer, incoming_references)
       case status do
-        :missing_streamer -> {graph, [{:missing_streamer, viewer, streamer} | recommendations ]}
+        :missing_streamer -> {graph, [{:missing_source, viewer, streamer} | recommendations ]}
         :ok ->
           {graph, [{:ok, viewer, recommendation} | recommendations ]}
       end
@@ -90,15 +128,16 @@ defmodule Conference.RoutingState.Routing do
   def create_stream(pid, :audio_only = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})
 
   @spec join_stream(pid(), :high_quality | :low_quality | :audio_only, String.t(), String.t()) :: {:ok, String.t()} | {:missing_streamer, []}
-  def join_stream(pid, :high_quality, streamer, viewer), do: GenServer.call(pid, {:add_viewer, :high_quality, streamer, viewer})
+  def join_stream(pid, quality, streamer, viewer), do: GenServer.call(pid, {:add_viewer, quality, streamer, viewer})
 
   @spec upsert_connection_quality(pid(), [%{source: String.t(), target: String.t(), weight: pos_integer()|pos_integer()}]) :: pid()
   def upsert_connection_quality(pid, new_weights), do: GenServer.call(pid, {:update_connection_quality, new_weights})
 
   @spec leave_stream(pid(), :high_quality|:low_quality|:audio_only, String.t(), String.t()) :: {:ok, [{:ok, String.t(), String.t()}|{:missing_parent, String.t(), String.t()}]}
-  def leave_stream(pid, :high_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :high_quality, streamer, viewer})
-  def leave_stream(pid, :low_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :low_quality, streamer, viewer})
+  def leave_stream(pid, quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, quality, streamer, viewer})
+  # def leave_stream(pid, :low_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :low_quality, streamer, viewer})
   # def leave_stream(pid, :audio_only, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :audio_only, streamer, viewer})
 
-  # def remove_user(pid, user), do: GenServer.call(pid, {:remove_user, user})
+
+  def remove_user(pid, user), do: GenServer.call(pid, {:remove_user, user})
 end
