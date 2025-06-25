@@ -63,6 +63,7 @@ defmodule Conference.RoutingState.Routing do
         {:reply, {:ok, recommendations}, new_state, @timeout}
     end
   end
+
   @impl true
   def handle_call({:remove_user, user_to_remove}, _from, state) do
     {state_after_viewer_removal, all_recommendations} =
@@ -101,6 +102,7 @@ defmodule Conference.RoutingState.Routing do
     final_state = Map.put(state_after_streamer_removal, :connection_quality, new_connection_quality)
     {:reply, {:ok, all_recommendations}, final_state, @timeout}
   end
+
   defp _get_new_recommendation_for_users(graph, connection_quality, list_of_affected_users, streamer) do
     Enum.reduce(list_of_affected_users, {graph, []}, fn (viewer, {graph, recommendations}) ->
       incoming_references = get_incoming_quality_streams_of_user(connection_quality, viewer)
