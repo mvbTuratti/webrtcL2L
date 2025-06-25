@@ -27,10 +27,6 @@ const router = createBrowserRouter([
     path: "/lobby/:roomId",
     element: <Lobby></Lobby>
   },
-  {
-    path: "/room/:roomId",
-    element: <ConferenceRoom />
-  }
 ]);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

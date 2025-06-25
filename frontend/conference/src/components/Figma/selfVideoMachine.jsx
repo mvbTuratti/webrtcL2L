@@ -1,131 +1,29 @@
-import { assign, fromPromise, setup, spawnChild, sendParent, enqueueActions, createMachine } from 'xstate';
+import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sendParent, enqueueActions, createMachine } from 'xstate';
+
 
 const getUserPermission = async ({camera, microphone, micId, videoId, width = 1200, height = 800}) => {
-  if (!camera && !microphone) return null;
-  const audio = microphone ? { deviceId: { exact: micId } } : {};
-  const video = camera ? { width: { ideal: width }, height: { ideal: height }, ...(videoId && videoId !== 'default' ? { deviceId: { exact: videoId } } : {}) } : false;
+  const audio = microphone ? {
+    ...(micId ? { deviceId: { exact: micId } } : {})
+  } : false;
+  const video = camera ? {
+    width: { ideal: width },
+    height: { ideal: height },
+    ...(videoId && videoId !== 'default' ? { deviceId: { exact: videoId } } : {})
+  } : false;
   return await navigator.mediaDevices.getUserMedia({audio: audio, video: video});
-};
-const getScreenSharePermission = async () => {
-    return await navigator.mediaDevices.getDisplayMedia({
-      video: { cursor: "always" },
-      audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 }
-    });
-};
+}
+
+function removedDevice(params) {
+  console.log("removeddddd")
+}
+
 async function listDeviceOptions(mediaType) {
-    if (!('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices)) {
-        return Promise.reject(new Error('Media devices not available.'));
-    }
+  if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
     const options = {audio: mediaType === 'audio', video: mediaType === 'video'}
     const devices = await navigator.mediaDevices.enumerateDevices();
     return { devices: devices.filter(device => device.kind === `${mediaType}input`), ...options}
-}
-const deviceOptions = setup({ actors: { askForDeviceOptions: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)), } }).createMachine({ id: "deviceOptions", initial: "empty", context: { videoOptions: [], audioOptions: [], }, states: { empty: { on: { "options.fetch":  'loadingDeviceOptions'}}, loadingDeviceOptions: { invoke: { src: 'askForDeviceOptions', input: ( { event } ) => ({ mediaType: event.mediaType }), onDone: { target: 'idle', actions: assign({ videoOptions: ( { event } ) => event.output.video ? event.output.devices : [], audioOptions: ( { event } ) => event.output.audio ? event.output.devices : [], }), }, onError: { target: 'failedToLoadOptions', actions: assign({ error: ({ event } ) => console.log(event.error, "error"), }), }, }, }, idle: { on: { "options.fetch":  { target: 'loadingDeviceOptions' } }, }, failedToLoadOptions: {}, } });
-
-
-export const fetchVideoMachine = setup(
-  {
-    actions: {
-        stopUserStream: ({ context }) => {
-            if (context.userStream) context.userStream.getTracks().forEach(track => track.stop());
-        },
-        stopScreenStream: ({ context }) => {
-            if (context.screenStream) context.screenStream.getTracks().forEach(track => track.stop());
-        },
-        toggleMicrophoneTrack: ({ context, event }) => {
-            if (context.userStream) {
-                context.userStream.getAudioTracks().forEach(track => {
-                    track.enabled = event.type === 'painel.addMic';
-                });
-            }
-        },
-    },
-    actors: {
-      askForUserPermission: fromPromise(({ input }) => getUserPermission({camera: input.camera, microphone: input.microphone, micId: input.micId, videoId: input.cameraId})),
-      askForScreenSharePermission: fromPromise(getScreenSharePermission),
-    },
   }
-).createMachine({
-  id: 'fetch',
-  initial: 'start',
-  context: {
-    camera: false,
-    microphone: false,
-    userStream: undefined,
-    screenStream: undefined,
-    micId: "default",
-    cameraId: "default",
-    joining: true,
-    isSharingScreen: false,
-  },
-  entry: spawnChild(deviceOptions, {id: 'devices'}),
-  states: {
-    start: { /* ...código existente... */ },
-    idle: {
-      entry: [assign({joining: () => false})],
-      on: {
-        "painel.addMic": { actions: ['toggleMicrophoneTrack', assign({ microphone: true })], },
-        "painel.removedMic": { actions: ['toggleMicrophoneTrack', assign({ microphone: false })], },
-        "painel.addCamera": { actions: assign({ camera: true }), target: 'reacquiringUserMedia' },
-        "painel.removedCamera": { actions: assign({ camera: false }), target: 'reacquiringUserMedia' },
-        "painel.changeMedia": {
-          actions: assign({
-            micId: ({ event, context }) => event.device === 'audio' ? event.mediaId : context.micId,
-            cameraId: ({event, context}) => event.device === 'video' ? event.mediaId : context.cameraId
-          }),
-          target: 'reacquiringUserMedia'
-        },
-        SHARE_SCREEN: 'startingScreenShare',
-      },
-    },
-    reacquiringUserMedia: {},
-    startingScreenShare: {
-        invoke: {
-            src: 'askForScreenSharePermission',
-            onDone: {
-                target: 'sharing',
-                actions: assign({
-                    screenStream: ({ event }) => event.output,
-                    isSharingScreen: true,
-                })
-            },
-            onError: { target: 'idle' }
-        }
-    },
-    sharing: {
-        entry: assign({
-            screenStream: ({ context, self }) => {
-                const screenTrack = context.screenStream.getVideoTracks()[0];
-                if (screenTrack) {
-                    screenTrack.onended = () => self.send({ type: 'STOP_SHARE_SCREEN' });
-                }
-                return context.screenStream;
-            }
-        }),
-        on: {
-            STOP_SHARE_SCREEN: {
-                actions: [
-                    'stopScreenStream', 
-                    assign({
-                        isSharingScreen: false,
-                        screenStream: undefined
-                    })
-                ],
-                target: 'idle',
-            }
-        }
-    },
-    noAvailableDevices: {}
-  },
-});
-
-async function listDeviceOptions(mediaType) {
-    if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
-      const options = {audio: mediaType === 'audio', video: mediaType === 'video'}
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      return { devices: devices.filter(device => device.kind === `${mediaType}input`), ...options}
-    }
-    return Promise.reject(new Error('Media devices not available.'));
+  raise({ type: 'failedToLoadOptions' });
 }
 
 const deviceOptions = setup({
@@ -143,7 +41,7 @@ const deviceOptions = setup({
     empty: { on: { "options.fetch":  'loadingDeviceOptions'}},
     loadingDeviceOptions: {
       invoke: {
-        src: 'askForDeviceOptions',
+        src: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)),
         input: ( { event } ) => ({ mediaType: event.mediaType }),
         onDone: {
           target: 'idle',
@@ -166,54 +64,36 @@ const deviceOptions = setup({
         "options.fetch":  {
           target: 'loadingDeviceOptions'
         }
+        
       },
     },
     failedToLoadOptions: {},
+    online: { after: { 5000: { actions: sendParent("REMOTE.ONLINE") } } }
   }
 });
 
 export const fetchVideoMachine = setup(
   {
     actions: {
-        stopUserStream: ({ context }) => {
-            if (context.userStream) {
-                context.userStream.getTracks().forEach(track => track.stop());
-            }
-        },
-        stopScreenStream: ({ context }) => {
-            if (context.screenStream) {
-                context.screenStream.getTracks().forEach(track => track.stop());
-            }
-        },
-        toggleMicrophoneTrack: ({ context, event }) => {
-            if (context.userStream) {
-                const audioTracks = context.userStream.getAudioTracks();
-                audioTracks.forEach(track => {
-                    track.enabled = event.type === 'painel.addMic';
-                });
-            }
-        },
     },
     actors: {
       askForDeviceOptions: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)),
-      askForUserPermission: fromPromise(({ input }) => getUserPermission({camera: input.camera, microphone: input.microphone, micId: input.micId, videoId: input.cameraId})),
-      askForScreenSharePermission: fromPromise(getScreenSharePermission),
+      askForUserPermission: fromPromise(({ input }) => getUserPermission({camera: input.camera || input.joining, microphone: input.microphone || input.joining, micId: input.micId, videoId: input.cameraId})),
     },
   }
 ).createMachine({
+  /** @xstate-layout N4IgpgJg5mDOIC5QDMwBcDGALAdLNAhgE5oDEEA9gHZg4CWVAbhQNa2qa77FoIPMYCaOtQDaABgC6EyYlAAHCrDrDqckAA9EAJgCs4nAE5dAZgCMegDQgAnogsAOHLoC+L6x2x5CJUmCJEFEQ48gA2QshBALY4nlw+vPwUgqpUMjLqisqp6loIDuIGAOy61nYIACwmukYWhhUAbBXaDrpFZhUVbh7oXnQQoWCk8gQMYKGxvVgZSCBZKiJUuYi6Fc5mxuZWtogVJTjiJobiDXrdIHH0A0MjYxNEYFEUjJAAsnQYMwpKC2qzeXoDJsLKUdghtNozEZTCDzpd+oNhqMaPdHs9IABhAhRfwEL5zH45f46fTQrag8rmJwVE5ndwXKZXRG3FE4bAEKgwV6QOh4qSZQmLZbg0nA7blCodHCtQwmEpwxkIm7I8Y4AgQCBYnFEPmyWbzImgAGimHilZmKHkhWcJnKu5qjXvT78-WCv5GklA00UxANcRFHBFBq6U6uemXKgUACCjFG4QARoMACJgRgfOBI+3qzXY3H4g1C4n5Um6Mwhs0IExHHAVXSGByQ5qtdqda1eSMxuMERNgFNpjAZlmq7NO-NupZFhwFaX1qolMo6KoHE4NQxNFptDpdc6RiBwdRxAXZQsehAAWjMC-PDTb8R4R9+E9PpYDVbrcp9lTMBlLtfEDkMDcW23HobSVB9DU0XYiivNoGhrQCzAceVw0ZDtYzoBNk1TdN4FdY93SghBv1rQM12Qz8TElIwTAaEwHCOICtzcNwgA */
   id: 'fetch',
   initial: 'start',
   context: {
     camera: false,
     microphone: false,
-    userStream: undefined, 
-    screenStream: undefined,
+    mediaStream: undefined,
     micId: "default",
     cameraId: "default",
     permissionRemovedMic: false,
     permissionRemovedCamera: false,
     joining: true,
-    isSharingScreen: false,
   },
   entry: spawnChild(deviceOptions, {id: 'devices'}),
   states: {
@@ -226,8 +106,7 @@ export const fetchVideoMachine = setup(
           assign({
             camera: ({context}) => context.joining ? true : context.camera,
             microphone: ({context}) => context.joining ? true : context.microphone,
-            userStream: ( { event } ) => event.output,
-            isSharingScreen: false, 
+            mediaStream: ( { event } ) => event.output,
           })
         ],
           target: 'idle',
@@ -248,92 +127,68 @@ export const fetchVideoMachine = setup(
     idle: {
       entry: [assign({joining: () => false})],
       on: {
-        "painel.addMic": {
-            actions: ['toggleMicrophoneTrack', assign({ microphone: true })],
+        "painel.fetch": {
+          actions: enqueueActions((({ enqueue, event }) => {
+            enqueue.sendTo('devices' , { type: "options.fetch", mediaType: event.mediaType })
+          }))
         },
         "painel.removedMic": {
-            actions: ['toggleMicrophoneTrack', assign({ microphone: false })],
+          actions: assign({
+            microphone: ({ event }) => false,
+            permissionRemovedMic: ({ event }) => 'permission' in event
+          }),
+          target: 'start'
         },
-        "painel.addCamera": { actions: assign({ camera: true }), target: 'reacquiringUserMedia' },
-        "painel.removedCamera": { actions: assign({ camera: false }), target: 'reacquiringUserMedia' },
+        "painel.removedCamera": {
+          actions: assign({
+            camera: ({ event }) => false,
+            permissionRemovedCamera: ({ event }) => 'permission' in event
+          }),
+          target: 'start'
+        },
         "painel.changeMedia": {
           actions: assign({
             micId: ({ event, context }) => event.device === 'audio' ? event.mediaId : context.micId,
             cameraId: ({event, context}) => event.device === 'video' ? event.mediaId : context.cameraId
           }),
-          target: 'reacquiringUserMedia'
+          target: 'start'
         },
-        SHARE_SCREEN: {
-            target: 'startingScreenShare',
-            guard: ({context}) => !context.isSharingScreen
+        "painel.addCamera": {
+          actions: assign({
+            camera: ({ event }) => true,
+          }),
+          target: 'start'
         },
-        STOP_SHARE_SCREEN: {
-            actions: [
-                'stopScreenStream', 
-                assign({
-                    isSharingScreen: false,
-                    screenStream: undefined
-                })
-            ],
-            target: 'idle',
-        }
+        "painel.addMic": {
+          actions: assign({
+            microphone: ({ event }) => true,
+          }),
+          target: 'start'
+        },
       },
     },
-    reacquiringUserMedia: {
-        entry: 'stopUserStream',
-        invoke: {
-            src: 'askForUserPermission',
-            input: ({context}) => context,
-            onDone: {
-                target: 'idle',
-                actions: assign({ userStream: ({ event }) => event.output })
-            },
-            onError: {
-                target: 'idle', 
-                actions: assign({ userStream: undefined })
-            }
-        }
-    },
-    startingScreenShare: {
-        invoke: {
-            src: 'askForScreenSharePermission',
-            onDone: {
-                target: 'sharing',
-                actions: assign({
-                    screenStream: ({ event }) => event.output,
-                    isSharingScreen: true,
-                })
-            },
-            onError: { target: 'idle' }
-        }
-    },
-    sharing: {
-        entry: assign({
-            screenStream: ({ context, self }) => {
-                const screenTrack = context.screenStream.getVideoTracks()[0];
-                if (screenTrack) {
-                    screenTrack.onended = () => self.send({ type: 'STOP_SHARE_SCREEN' });
-                }
-                return context.screenStream;
-            }
-        }),
-        on: {
-            STOP_SHARE_SCREEN: {
-                actions: [
-                    'stopScreenStream', 
-                    assign({
-                        isSharingScreen: false,
-                        screenStream: undefined
-                    })
-                ],
-                target: 'idle',
-            }
-        }
-    },
     noAvailableDevices: {
-      entry: [ assign({ /* ... */ }) ],
+      entry: [
+        assign({
+          mediaStream: () => null,
+          microphone: () => false,
+          camera: () => false,
+          joining: () => false
+        }), 
+        ],
       on: {
-        SHARE_SCREEN: 'startingScreenShare'
+        "painel.addCamera": {
+          actions: assign({
+            camera: ({ context }) => !context.permissionRemovedCamera,
+          }),
+          target: 'start'
+        },
+        "painel.addMic": {
+          actions: assign({
+            microphone: ({ context }) => !context.permissionRemovedMic,
+          }),
+          target: 'start'
+        },
       }
     }
   },

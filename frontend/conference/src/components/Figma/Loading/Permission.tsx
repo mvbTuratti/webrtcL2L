@@ -5,9 +5,8 @@ import { VideoCameraContext } from '../FigmaTest'
 import { Input } from "@nextui-org/react";
 import ButtonJoinMeeting from './ButtonJoinMeeting';
 import { useEffect, useState } from 'react';
-import { DetailsFilled } from '../Joining/Joining'
-import Test from '../Test'
 import { useNavigate } from 'react-router-dom';
+import LoadingScreen from './LoadingScreen'
 
 function watchPermissionRemoval(type: string, videoRef: any) {
   navigator.permissions.query({ name: type as PermissionName })
@@ -35,14 +34,12 @@ interface Permission {
 
 const Permission = ({ room } : Permission): JSX.Element => {
   const [buttonState, setButtonState] = useState("loading")
-  const [testState, setTestState] = useState(false)
+  const [conferenceState, setconferenceState] = useState(false)
   const [user, setUser] = useState("")
+
   const state = VideoCameraContext.useSelector((state) => state);
   const videoActorRef = VideoCameraContext.useActorRef();
-  const navigate = useNavigate();
   
-  // videoActorRef.subscribe(e => console.log(e.toJSON()))
-  console.log(room)
   useEffect(() => {
       const elements: string[] = ["camera", "microphone"];
       if ('permissions' in navigator ) {
@@ -64,7 +61,6 @@ const Permission = ({ room } : Permission): JSX.Element => {
       };
   }, []);
   
-
   const handleInputName = (name : string) => {
     if (name.trim().length > 2) {
       setButtonState("done")
@@ -75,10 +71,12 @@ const Permission = ({ room } : Permission): JSX.Element => {
   }
   const handleClickJoinRoom = () => {
     if (room && user) {
-      navigate(`/room/${room}`, { state: { userName: user } });
+      setconferenceState(true)
     }
   };
   return (
+    <>
+    {conferenceState ? ( <LoadingScreen room={room} userName={user} /> ) : (
     <div className="relative w-screen h-screen bg-black flex items-center justify-center">
       <div className="inline-flex flex-col items-center gap-10 ">
         <div className="inline-flex flex-col items-center gap-2 relative flex-[0_0_auto]">
@@ -109,6 +107,7 @@ const Permission = ({ room } : Permission): JSX.Element => {
         </div>
       </div>
     </div>
+    ) }</>
   );
 };
 
