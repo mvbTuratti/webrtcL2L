@@ -133,14 +133,14 @@ defmodule ConferenceWeb.Channel.Room do
     end
     {:noreply, socket}
   end
-  def handle_info({:private_message, {:private_message, %{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: user}}}, socket) do
+  def handle_info({:private_message, %{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: user}}, socket) do
     IO.inspect(%{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: user}, label: "Received message from user")
     push(socket, "negotiation_response", %{"hash" => hash, "sdp" => sdp, "ice" => ice})
-    socket = assign(socket, :current_users, Map.put(socket.assigns.current_users, hash, %{user: user})) |> assign(:users, [user | socket.assigns.users])
+    socket = assign(socket, :sdp_pairs, Map.put(socket.assigns.sdp_pairs, hash, %{user: user})) |> assign(:pairs, [user | socket.assigns.pairs])
     {:noreply, socket}
   end
   def handle_info({:private_message,  %{protocol: :ice_update, hash: hash, ice: new_ice}}, socket) do
-    IO.inspect(%{protocol: :ice_update, hash: hash, ice: new_ice}, label: "Received message from user")
+    # IO.inspect(%{protocol: :ice_update, hash: hash, ice: new_ice}, label: "Received message from user")
     push(socket, "ice_update", %{"hash" => hash, "ice" => new_ice})
     {:noreply, socket}
   end
@@ -171,15 +171,16 @@ defmodule ConferenceWeb.Channel.Room do
     {:noreply, socket}
   end
   def handle_in("negotiation_response", %{"sdp" => sdp, "hash" => hash , "ice" => ice}, socket) do
+    IO.inspect("STOP! WE REACHED HERE...")
     case Map.get(socket.assigns.sdp_pairs, hash) do
-      nil -> {:noreply, socket}
+      nil -> {:reply, :error, socket}
       map ->
         send(map.creator_pid, {:private_message, %{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: socket.assigns.user}})
-        {:noreply, socket}
+        {:reply, :ok, socket}
     end
   end
   def handle_in("ice_update", %{"hash" => hash, "ice" => ice}, socket) do
-    IO.inspect(%{"hash" => hash, "ice" => ice}, label: "Handle IN")
+    # IO.inspect(%{"hash" => hash, "ice" => ice}, label: "Handle IN")
     {term, response} = Peers.update_ice(socket.assigns.peerfinding_pid, hash, ice, self())
     IO.inspect({term, response}, label: "Here")
     {:reply, term, socket}
@@ -203,7 +204,7 @@ defmodule ConferenceWeb.Channel.Room do
       [ user | acc ]
     end)
     push(socket, "pairs", %{"pairs" => users})
-    socket = assign(socket, :users, socket.assigns.users ++ users) |> assign(:sdp_pairs, Map.merge(socket.assigns.sdp_pairs, current_users))
+    socket = assign(socket, :pairs, socket.assigns.pairs ++ users) |> assign(:sdp_pairs, Map.merge(socket.assigns.sdp_pairs, current_users))
     {:reply, :ok, hash, socket}
   end
   def handle_in("connection_quality", %{"target" => target, "weight" => weight}, socket) do

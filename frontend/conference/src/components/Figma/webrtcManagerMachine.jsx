@@ -58,6 +58,21 @@ export const webrtcManagerMachine = createMachine({
             }
           ),
         },
+        "child.NEGOTIATION_RESPONSE": {
+          actions: enqueueActions(({ enqueue, event, context }) => {
+            console.log("EVENT IN PARENT PRE CONNECT", event, context)
+            const hash = context.hashes[event.message.originId]
+              enqueue.sendParent({
+                type: 'child.NEGOTIATION_RESPONSE',
+                message: {
+                  sdp: event.message.sdp,
+                  ice: event.message.sdp,
+                  hash: hash
+                }
+              });
+            }
+          ),
+        },
         JOIN_HASH: {
           target: 'connected',
           input: ({ event }) => ({
@@ -91,7 +106,7 @@ export const webrtcManagerMachine = createMachine({
               hashes[`webrtc-${user}-${pairType}-${date}`] = hash
               hashes[hash] = `webrtc-${user}-${pairType}-${date}`
               // TODO: add callback to parent
-              console.log("WEBRTC SPAWNED CHILD", newWebrtcs)
+              console.log("WEBRTC SPAWNED CHILD", newWebrtcs, hashes)
             });
             return {
               ...context,
@@ -116,11 +131,10 @@ export const webrtcManagerMachine = createMachine({
         hashes: ({ context, event }) => {
           const hash = event.data.hash;
           const origin = event.data.origin;
-          return { [hash]: origin, [origin]: hash};
+          return { ...context.hashes, [hash]: origin, [origin]: hash};
         },
-        ice: () => []
       })
-      console.log("FINISHED CONNECTING!!!!!!!!!")
+      console.log("connected manager machine", context)
     })),
     on: {
       CURRENT_USERS_SDP: {
@@ -133,37 +147,29 @@ export const webrtcManagerMachine = createMachine({
             }
           }
           let newWebrtcs = { ...context.webrtcs };
+          let hashes = {...context.hashes};
           event.data.forEach(pair => {
-            const { user, sdp } = pair;
+            console.log("WHAT DO I HAVE HERE???", pair)
+            const { user, sdp, ice, hash } = pair;
             const pairType = "data"
-            if (!sdp || sdp.trim() === '') {
-              const date = Date.now().toString()
-              const webrtcActor = spawn(
-                createWebRTCConnectionMachine(user, pairType, 'instigator', date),
-                { id: `webrtc-${user}-${pairType}-${date}` }
-              );
-              newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
-                ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-                [pairType]: webrtcActor
-              };
-              // TODO: Add callback to parent
-            } else {
-              const date = Date.now().toString()
-              const webrtcActor = spawn(
-                createWebRTCConnectionMachine(user, pairType, 'receiver', sdp, date),
-                { id: `webrtc-${user}-${pairType}-${date}` }
-              );
-              newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
-                ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-                [pairType]: webrtcActor
-              };
-              // TODO: add callback to parent
-            }
-            console.log("WEBRTC SPAWNED CHILD", newWebrtcs)
+            const date = Date.now().toString()
+            const webrtcActor = spawn(
+              createWebRTCConnectionMachine(user, pairType, 'receiver', date, sdp, ice),
+              { name: `webrtc-${user}-${pairType}-${date}` }
+            );
+            newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
+              ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
+              [pairType]: webrtcActor
+            };
+            hashes[`webrtc-${user}-${pairType}-${date}`] = hash
+            hashes[hash] = `webrtc-${user}-${pairType}-${date}`
+            // TODO: add callback to parent
+            console.log("WEBRTC SPAWNED CHILD", newWebrtcs, hashes)
           });
           return {
             ...context,
-            webrtcs: newWebrtcs
+            webrtcs: newWebrtcs,
+            hashes: hashes
           };
         })
       },
@@ -187,14 +193,21 @@ export const webrtcManagerMachine = createMachine({
           };
         })
       },
-      UPDATE_CONNECTION: {
-        actions: (context, event) => {
-          const { user, pairType, data } = event;
-          const actor = context.webrtcs[user]?.[pairType];
+      MAKE_PAIR: {
+        entry: () => console.log("HERE IN ENTRY OF MAKE PAIR!!!!!!!!\N"),
+        actions: enqueueActions((({ enqueue, event, context }) => {
+          console.log("AAAAAAAAA!!!!!!!", event)
+          const { hash, sdp, ice } = event;
+          const machineName = context.hashes[hash]; // TODO: add some level of fallback?
+          console.log("MACHINE NAME", context)
+          console.log(context.webrtcs)
+          const actor = context.webrtcs[machineName]?.["data"]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
           if (actor) {
-            actor.send({ type: 'UPDATE', data });
+            const payload = { sdp, ice };
+            console.log(actor)
+            enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
           }
-        }
+        }))
       },
       DISCONNECT_CONNECTION: {
         actions: (context, event) => {
@@ -226,6 +239,21 @@ export const webrtcManagerMachine = createMachine({
                 ice: candidate,
                 hash: hash,
             }});
+          }
+        ),
+      },
+      "child.NEGOTIATION_RESPONSE": {
+        actions: enqueueActions(({ enqueue, event, context }) => {
+          console.log("EVENT IN PARENT POST CONNECT", event, context)
+          const hash = context.hashes[event.message.originId]
+          enqueue.sendParent({
+            type: 'child.NEGOTIATION_RESPONSE',
+            message: {
+              sdp: event.message.sdp,
+              ice: event.message.ice,
+              hash: hash
+            }
+          });
           }
         ),
       },

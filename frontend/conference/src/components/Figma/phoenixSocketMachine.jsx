@@ -117,6 +117,10 @@ const websocketMachine = setup(
           console.log("------- ICE_UPDATE EVENT -----", payload)
           self.send({ type: 'ICE_UPDATE', data: payload })
         })
+        context.channel.on("negotiation_response", (payload) => {
+          console.log("------- MAKE_PAIR EVENT -----", payload)
+          self.send({ type: 'MAKE_PAIR', data: payload })
+        })
         context.channel.on("user_left", (payload) => {
           self.send({ type: 'USER_LEFT', data: payload })
           // send('webrtcManager',{ type: 'USER_LEFT', data: payload });
@@ -142,6 +146,11 @@ const websocketMachine = setup(
         JOIN_HASH: {
           actions: enqueueActions((({ enqueue, event, context }) => {
             enqueue.sendTo(context.webrtcManager,{ type: 'JOIN_HASH', data: event.data })
+          }))
+        },
+        MAKE_PAIR: {
+          actions: enqueueActions((({ enqueue, event, context }) => {
+            enqueue.sendTo(context.webrtcManager,{ type: 'MAKE_PAIR', data: event.data })
           }))
         },
         PAIRS: {
@@ -175,6 +184,26 @@ const websocketMachine = setup(
                 });;
             } else {
               console.error("Cannot send ICE update: channel not available or payload is invalid.", {
+                hasChannel: !!context.channel,
+                hash,
+                ice
+              });
+            }
+          }
+        },
+        "child.NEGOTIATION_RESPONSE": {
+          actions: ({ context, event }) => {
+            console.log("NEGOTIATION_RESPONSE: Received from child, sending to Phoenix...", event.message);
+            const { hash, ice, sdp } = event.message;
+            if (context.channel && hash && ice && sdp) {
+              context.channel.push("negotiation_response", { hash, ice, sdp }).receive("ok", (response) => {
+                  console.log("Server ACK'd batched NEGOTIATION_RESPONSE:", response);
+                })
+                .receive("error", (reason) => {
+                  console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
+                });;
+            } else {
+              console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
                 hasChannel: !!context.channel,
                 hash,
                 ice
