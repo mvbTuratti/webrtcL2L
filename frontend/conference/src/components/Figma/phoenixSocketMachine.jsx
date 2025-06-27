@@ -2,10 +2,10 @@ import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sen
 import { Socket } from 'phoenix';
 import webrtcManagerMachine from './webrtcManagerMachine';
 
-async function connectSocket(room, user, sdp, type) {
-  console.log('Attempting to connect to WebSocket...');
+async function connectSocket(room, user, sdp, type, origin) {
+  console.log('Attempting to connect to WebSocket...', room, user, sdp, type, origin);
   return new Promise((resolve, reject) => {
-    const socket = new Socket('/socket', {params: {user: user, sdp: sdp, type: type}});
+    const socket = new Socket('/socket', {params: {user: user, sdp: sdp, type: type, origin: origin}});
     socket.connect();
     const channel = socket.channel(`room:${room}`, {});
 
@@ -26,7 +26,7 @@ const websocketMachine = setup(
   {
     actions: {},
     actors: {
-      setupSocketConnection: fromPromise(({input}) => connectSocket(input.room, input.user, input.sdp, input.format))
+      setupSocketConnection: fromPromise(({input}) => connectSocket(input.room, input.user, input.sdp, input.format, input.originId))
     }
   }
 ).createMachine({
@@ -64,22 +64,25 @@ const websocketMachine = setup(
         enqueue.sendTo(context.webrtcManager,{ type: 'CREATE_PLACEHOLDER_CONNECTION' })
       })),
       on: {
-        CONNECT: {
-          target: 'connecting',
-          input: ( { event } ) => ({ room: event.room, user: event.user, type: event.type }),
-          actions: () => console.log('CONNECT event received, transitioning to connecting'),
-        },
         "child.SDP_VALUE": {
           target: 'connecting',
-          input: ( { event } ) => ({ sdp: event.message.sdp}),
+          input: ({ event }) => ({
+            sdp: event.message?.sdp,       
+            format: event.message?.format,
+            originId: event.message.originId
+          }),
         },
       },
     },
     connecting: {
-      entry: () => console.log('Entered state: connecting'),
+      entry: (e) => console.log('Entered state: connecting', e),
       invoke: {
         src: 'setupSocketConnection',
-        input: ( { event, context } ) => ({ room: context.room, user: context.user, sdp: event.sdp, format: event.format }),
+        input: ({ context, event }) => ({
+          room: context.room,
+          user: context.user,
+          ...event.message
+        }),
         onDone: {
           target: 'connected',
           actions: assign({
@@ -95,13 +98,24 @@ const websocketMachine = setup(
       },
     },
     connected: {
-      entry: ({ context, self }) => {
+      entry: ({ context, self, send }) => {
         console.log('Entered state: connected', context)
+        context.channel.on("join_hash", (payload) => {
+          console.log("------- JOIN HASH EVENT -----", payload)
+          // self.send({ type: 'PAIRS', data: payload })
+          self.send({ type: 'JOIN_HASH', data: payload });
+        })
         context.channel.on("sdp_pairs", (payload) => {
+          console.log("------- SDP PAIRS EVENT -----", payload)
           self.send({ type: 'CURRENT_USERS_SDP', data: payload })
         })
         context.channel.on("pairs", (payload) => {
+          console.log("------- PAIRS EVENT -----", payload)
           self.send({ type: 'PAIRS', data: payload })
+        })
+        context.channel.on("ice_update", (payload) => {
+          console.log("------- ICE_UPDATE EVENT -----", payload)
+          self.send({ type: 'ICE_UPDATE', data: payload })
         })
         context.channel.on("user_left", (payload) => {
           self.send({ type: 'USER_LEFT', data: payload })
@@ -125,6 +139,11 @@ const websocketMachine = setup(
             enqueue.sendTo(context.webrtcManager,{ type: 'CURRENT_USERS_SDP', data: event.data.sdp_pairs })
           }))
         },
+        JOIN_HASH: {
+          actions: enqueueActions((({ enqueue, event, context }) => {
+            enqueue.sendTo(context.webrtcManager,{ type: 'JOIN_HASH', data: event.data })
+          }))
+        },
         PAIRS: {
           actions: enqueueActions((({ enqueue, event }) => {
             enqueue.assign({
@@ -137,11 +156,31 @@ const websocketMachine = setup(
             pairs: ({ event, context }) => context.pairs.filter( (item) => item !== event.data.user),
           })
         },
+        ICE_UPDATE: {
+          actions: ({ context, event }) => {
+            console.log("-------ICE - UPDATE - SERVER --------", event)
+            // TODO: ADD FUNCTIONALITY!!
+          }
+        },
         "child.PUSH_PARTIAL_ICE_CANDIDATE": {
-          actions: enqueueActions(({ context, enqueue, event }) => {
-              console.log("PUSH PARTIAL ICE CANDIDATE", event, context)
+          actions: ({ context, event }) => {
+            console.log("PUSH PARTIAL ICE CANDIDATE: Received from child, sending to Phoenix...", event.message);
+            const { hash, ice } = event.message;
+            if (context.channel && hash && ice) {
+              context.channel.push("ice_update", { hash, ice }).receive("ok", (response) => {
+                  console.log("Server ACK'd batched ice_update:", response);
+                })
+                .receive("error", (reason) => {
+                  console.error("Server rejected batched ice_update:", reason);
+                });;
+            } else {
+              console.error("Cannot send ICE update: channel not available or payload is invalid.", {
+                hasChannel: !!context.channel,
+                hash,
+                ice
+              });
             }
-          ),
+          }
         },
       },
     },

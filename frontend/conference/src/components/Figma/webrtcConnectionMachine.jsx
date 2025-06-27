@@ -13,7 +13,7 @@ async function createOfferPromise(peerConnection) {
     return offer;
 }
 
-export const createWebRTCConnectionMachine = (pairName, pairType, mode) =>
+export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp) =>
   setup(  {
     actions: {
       createWebRTCObject: assign(({context, event}) => {
@@ -33,7 +33,8 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode) =>
       pushPartialSDP: enqueueActions(({ context, enqueue, event }) => {
             enqueue.sendParent(
                 { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
-                    latestCandidate: event.candidate
+                    latestCandidate: event.candidate,
+                    originId: event.originId
                 }
             }
             );
@@ -46,7 +47,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode) =>
   }).
   createMachine({
     /** @xstate-layout N4IgpgJg5mDOIC5QAoC2BDAxgCwJYDswBKAOgBsB7dCAqAYgGEB5AORYFEGAVdgEQG0ADAF1EoAA4VYuAC64K+MSAAeiAMyDBJAKwBGbQDYALIKMAOAwCYAnGt0AaEAE9ElgOzaSZ87st+DZroWagC+IY5oWHiEpJTUtHQAYgCCAJIAMgCqAErsQqJIIJLScgpKqgi6gpZGJJbamgZqRj7almaOLgjNZiRulhre3mpuZtreYREYOATEJIRQFHLocvhQJFAr2GAATgmpDOwA+gzJLLypvMk8+UrFsvKKhRXWvdraRgG+RnoaRp2IbRqN56eqBd7GIGTECRGYxeZgRbLVbrTYybZ7NZ0DgAcSYXFS11SrCOHD4fFuhXupSeoAq-QBCBalhIglevjUeiCBjcumhsOicwWS1wK1oGy2u32hyOOOuAAl2NlUiwcScmABZAAK6XYNxEdykDzKz3Umj6DU0HyMll0ulejIC1hI1m0bnM7tdPLt-OmgtIwuR4oAZgR0GRcAAvBLKWAyFZgEjoYMyXbISyaIh0AWzAOIkVitYkUP4cNR2iUiRGmnlRAGaxaAyGGyCXRuaofSyO6y6Eg-T3tszeHlmX1RXMIpGilHZMCYMC4ABuuzoEAUibjCZIOfhgentFn86Xu0rRWrj1rCHcvUEY1s-X0GesBkZQVqQzt1i-7NdljHcLmTAFEITBUwgOhMi1K59QKKsSgvU1KhqLQgg8Ax7XtDNxkZQIdHtL8WmZT8-3CGE-QnID8BAsC6AuABlZg2E4LhT2pBC6UBLtnEQKoBhIKwjF8fpXnGAwwlI-AKAgOAlB3YhDXgk0OIQABaGpGRUzxXk0HTdJ0ox-39cgqBoNYFONWkVEQG1GUsHlWXZIwRjMV1dDUGpDInPdCygcya0Q9TuO6D4dHZNl2z0awPE83d8yDIs0QxWg-PYqzKkEAwvFeG0XJGL9jDcR0DEy10PF0T4ot5d0YqFOL9yLEsy2jMyqXPJS0rdRtzE+QR+h+YFtG7LR+yMKK23rGq8ynHySEo6jIBS9qKjMOz+MMDQbCHNw1HrIrPHbMq7DdMx+jcSbJwLGc5wXZcdkWyyKhsoL9GdNkzHC5onLZPlSLk0gaFgOa5zA+7L1tWoGyscYMwCcxTFfVt9t68xbSBGpjHOoHQIW1rFIe6zxn4twooGVtXUql9npWl1tt8BsTq-VszvEoA */
-    id: `webrtc-${pairName}-${pairType}`,
+    id: `webrtc-${pairName}-${pairType}-${timestamp}`,
     initial: 'loading',
     context: {
       peerConnection: undefined, // will hold the actual WebRTC object
@@ -55,6 +56,8 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode) =>
       candidates: [],
       pairName: pairName,
       pairType: pairType,
+      timestamp: timestamp,
+      name: `webrtc-${pairName}-${pairType}-${timestamp}`,
       mode: mode,
       configuration: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
     },
@@ -81,8 +84,9 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode) =>
                                 localSdp: event.output
                             })
                             context.peerConnection.onicecandidate = (e) => {
+                                // console.log("---------ICE CANDIDATE--------", e)
                                 if (e.candidate) {
-                                  self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate });
+                                  self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, originId: context.name });
                                 }
                             };
                             context.peerConnection.addEventListener('connectionstatechange', event => {
@@ -94,7 +98,8 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode) =>
                             console.log("SENDING MESSAGE TO PARENT")
                             enqueue.sendParent({ type: 'child.SDP_VALUE', message: {
                                 sdp: event.output,
-                                format: context.pairType
+                                format: context.pairType,
+                                originId: context.name
                             }})
                           }),
                           target: 'loading'

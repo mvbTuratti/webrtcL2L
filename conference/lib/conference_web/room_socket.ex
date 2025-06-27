@@ -15,6 +15,7 @@ defmodule ConferenceWeb.RoomSocket do
     IO.puts("connect /3")
     socket = assign(socket, :user, params["user"])
             |> assign(:sdp, params["sdp"])
+            |> assign(:origin, params["origin"])
     # IO.inspect(params, label: "Params in connect/3")
     # IO.inspect(socket)
     {:ok, socket}

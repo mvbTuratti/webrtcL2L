@@ -73,7 +73,7 @@ defmodule Conference.SdpTable.Peers do
   end
   @impl true
   def handle_call({:update_ice, hash, new_ice, user_pid}, _from, state) do
-    IO.inspect({hash, new_ice}, label: "Here in handle call")
+    # IO.inspect({hash, new_ice}, label: "Here in handle call")
     cond do
       Map.has_key?(state.active, hash) ->
         entry = state.active[hash]
@@ -89,11 +89,14 @@ defmodule Conference.SdpTable.Peers do
         end
 
       Map.has_key?(state.pending, hash) ->
-        IO.inspect(state.pending[hash], label: "Updating pending entry")
+        # IO.inspect(state.pending[hash], label: "Updating pending entry")
         entry = state.pending[hash]
-        updated_entry = Map.update!(entry, :ice, fn ice -> [new_ice | ice] end)
+        updated_entry = Map.update!(entry, :ice, fn existing_ice ->
+          normalized_new_ice = List.wrap(new_ice)
+          normalized_new_ice ++ existing_ice
+        end)
         new_pending = Map.put(state.pending, hash, updated_entry)
-        IO.inspect(new_pending, label: "New pending entry")
+        # IO.inspect(new_pending, label: "New pending entry")
         {:reply, {:ok, :success}, %{state | pending: new_pending}, @timeout}
 
       true ->

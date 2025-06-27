@@ -29,7 +29,8 @@ defmodule ConferenceWeb.Channel.Room do
     IO.puts("join")
     IO.inspect(room, label: "ROOM IN JOIN!!")
     PubSub.subscribe(Conference.PubSub, room)
-    {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online", pid: self()})
+    # {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online", pid: self()})
+    {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online"})
     {routing_pid, peerfinding_pid} = get_state_pids(room)
     hash = Peers.generate_hash(socket.assigns.user)
     current_users = Peers.join_negotiation(peerfinding_pid,hash, socket.assigns.sdp, self(), "data", false, socket.assigns.user)
@@ -45,7 +46,7 @@ defmodule ConferenceWeb.Channel.Room do
 
     warn_users_they_should_create_new_sdps(users, socket.assigns.room, socket.assigns.user)
     # IO.inspect(socket, label: "room.ex: User #{socket.id} - Room #{room} // after changes to subscription")
-    # send(self(), :after_join)
+    send(self(), :after_join)
     ############# IMPORTANT!!!!!!!
     ##############################
     ################## ADD THE SEND SELF WHEN NOT TESTING!
@@ -102,7 +103,7 @@ defmodule ConferenceWeb.Channel.Room do
     end)
     push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
     push(socket, "pairs", %{"pairs" => socket.assigns.pairs})
-    push(socket, "join_hash", %{"hash" => socket.assigns.hash})
+    push(socket, "join_hash", %{"hash" => socket.assigns.hash, "origin" => socket.assigns.origin})
     {:noreply, socket}
   end
   def handle_info({:user_left, data}, socket) do
@@ -197,13 +198,13 @@ defmodule ConferenceWeb.Channel.Room do
       [%{hash: hash, user: user, sdp: sdp, ice: ice}  | acc]
     end)
     push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
-    push(socket, "join_hash", %{"hash" => hash})
+    # push(socket, "join_hash", %{"hash" => hash})
     users = Enum.reduce(current_users, [], fn {_key, %{name: user}}, acc ->
       [ user | acc ]
     end)
     push(socket, "pairs", %{"pairs" => users})
     socket = assign(socket, :users, socket.assigns.users ++ users) |> assign(:sdp_pairs, Map.merge(socket.assigns.sdp_pairs, current_users))
-    {:noreply, socket}
+    {:reply, :ok, hash, socket}
   end
   def handle_in("connection_quality", %{"target" => target, "weight" => weight}, socket) do
     router = socket.assings.routing_pid
