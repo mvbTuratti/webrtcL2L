@@ -1,9 +1,17 @@
 import { createMachine, assign, setup, sendParent, enqueueActions, fromPromise } from 'xstate';
 
 
-function createOfferNegotiation(peerConnection) {
-    return peerConnection.createOffer()
-      .then(offer => peerConnection.setLocalDescription(offer));
+// function createOfferNegotiation(peerConnection) {
+//     return peerConnection.createOffer()
+//       .then(offer => peerConnection.setLocalDescription(offer));
+// }
+
+async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandidates }) {
+    await peerConnection.setRemoteDescription(offerSdp);
+    await Promise.all(iceCandidates.map(candidate => peerConnection.addIceCandidate(candidate)));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    return peerConnection.localDescription;
 }
 
 async function createOfferPromise(peerConnection) {
@@ -13,7 +21,7 @@ async function createOfferPromise(peerConnection) {
     return offer;
 }
 
-export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp) =>
+export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp, offerSdp = "",ice = []) =>
   setup(  {
     actions: {
       createWebRTCObject: assign(({context, event}) => {
@@ -43,6 +51,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
     },
     actors: {
         createOffer: fromPromise(( peerConnection ) => createOfferPromise(peerConnection)),
+        createAnswer: fromPromise(createAnswerAndSetCandidates),
     }
   }).
   createMachine({
@@ -58,7 +67,9 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
       pairType: pairType,
       timestamp: timestamp,
       name: `webrtc-${pairName}-${pairType}-${timestamp}`,
+      ice: ice,
       mode: mode,
+      offerSdp: offerSdp,
       configuration: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
     },
     states: {
@@ -115,12 +126,10 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         ICE_CANDIDATE: {
                             actions: [
                                 assign(({context, event}) => {
-                                    // Collect candidates; you could also merge them with your SDP if desired.
                                     const candidates = context.candidates || [];
-                                    // console.log("HERE IN ACTIONS ICE_CANDIDATE", event.candidate)
                                     return { candidates: [...candidates, event.candidate] };
                                 }),
-                                'pushPartialSDP' // custom action to push updated partial SDP to the server
+                                'pushPartialSDP'
                             ]
                         },
                         NEGOTIATION_NEEDED: {
@@ -132,7 +141,6 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 finished: {
                     type: 'final',
                     entry: assign(({context, event}) => {
-                        // Optionally, store the final SDP and candidates
                         console.log("FINAL!", context.peerConnection.localDescription)
                         return { localSdp: context.peerConnection.localDescription };
                     })
@@ -144,8 +152,84 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
             }
         },
         negotiatingReceiver: {
-            entry: () => console.log("Here in negotiationReceiver"),
-            type: 'final',
+            initial: 'creatingAnswer',
+            entry: () => console.log("Entering receiver negotiation flow..."),
+            states: {
+              creatingAnswer: {
+                invoke: {
+                  src: 'createAnswer', 
+                  input: ({ context }) => ({
+                    peerConnection: context.peerConnection,
+                    offerSdp: context.offerSdp,
+                    iceCandidates: context.ice,
+                  }),
+                  onDone: {
+                    target: 'gatheringCandidates',
+                    actions: enqueueActions(({ context, enqueue, event, self }) => {
+                      console.log("Answer created successfully, now gathering candidates:", event.output);
+                      enqueue.assign({
+                        localSdp: event.output
+                      });
+                      enqueue.sendParent({
+                        type: 'child.SDP_VALUE',
+                        message: {
+                          sdp: event.output,
+                          format: 'answer',
+                          originId: context.name
+                        }
+                      });
+                      context.peerConnection.onicecandidate = (e) => {
+                        if (e.candidate) {
+                          self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate });
+                        }
+                      };
+                    //   context.peerConnection.onicegatheringstatechange = (e) => {
+                    //     if (context.peerConnection.iceGatheringState === 'complete') {
+                    //       self.send({ type: 'ICE_GATHERING_COMPLETE' });
+                    //     }
+                    //   };
+                      context.peerConnection.addEventListener('connectionstatechange', () => {
+                        if (context.peerConnection.connectionState === 'connected') {
+                          self.send({ type: 'CONNECTED' });
+                        }
+                      });
+                    })
+                  },
+                  onError: {
+                    target: 'error',
+                    actions: ({ event }) => console.error("Failed to create answer:", event.data)
+                  }
+                }
+              },
+              gatheringCandidates: {
+                on: {
+                  ICE_CANDIDATE: {
+                    actions: assign({
+                      candidates: ({ context, event }) => [...context.candidates, event.candidate]
+                    })
+                  },
+                  ICE_GATHERING_COMPLETE: {
+                    actions: sendParent(({ self, context }) => ({
+                      type: 'child.PUSH_PARTIAL_ICE_CANDIDATE',
+                      message: {
+                        originId: self.id,
+                        ice: context.candidates
+                      }
+                    }))
+                  },
+                  CONNECTED: {
+                    target: 'finished'
+                  }
+                }
+              },
+              finished: {
+                type: 'final',
+                entry: () => console.log('Receiver connection process finished and connected.')
+              },
+              error: {
+                entry: () => console.log("error....")
+              }
+            },
             onDone: 'connected'
         },
         disconnected: {

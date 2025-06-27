@@ -74,38 +74,29 @@ export const webrtcManagerMachine = createMachine({
               }
             }
             let newWebrtcs = { ...context.webrtcs };
+            let hashes = {...context.hashes};
             event.data.forEach(pair => {
               console.log("WHAT DO I HAVE HERE???", pair)
-              const { user, sdp } = pair;
+              const { user, sdp, ice, hash } = pair;
               const pairType = "data"
-              if (!sdp || sdp.trim() === '') {
-                const date = Date.now().toString()
-                const webrtcActor = spawn(
-                  createWebRTCConnectionMachine(user, pairType, 'instigator', date),
-                  { id: `webrtc-${user}-${pairType}-${date}` }
-                );
-                newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
-                  ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-                  [pairType]: webrtcActor
-                };
-                // TODO: Add callback to parent
-              } else {
-                const date = Date.now().toString()
-                const webrtcActor = spawn(
-                  createWebRTCConnectionMachine(user, pairType, 'receiver', sdp, date),
-                  { id: `webrtc-${user}-${pairType}-${date}` }
-                );
-                newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
-                  ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-                  [pairType]: webrtcActor
-                };
-                // TODO: add callback to parent
-              }
+              const date = Date.now().toString()
+              const webrtcActor = spawn(
+                createWebRTCConnectionMachine(user, pairType, 'receiver', date, sdp, ice),
+                { name: `webrtc-${user}-${pairType}-${date}` }
+              );
+              newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
+                ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
+                [pairType]: webrtcActor
+              };
+              hashes[`webrtc-${user}-${pairType}-${date}`] = hash
+              hashes[hash] = `webrtc-${user}-${pairType}-${date}`
+              // TODO: add callback to parent
               console.log("WEBRTC SPAWNED CHILD", newWebrtcs)
             });
             return {
               ...context,
-              webrtcs: newWebrtcs
+              webrtcs: newWebrtcs,
+              hashes: hashes
             };
           })
         },
