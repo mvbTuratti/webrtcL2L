@@ -10,7 +10,9 @@ export const webrtcManagerMachine = createMachine({
     webrtcs: {},
     hashes: {},
     placeholder: undefined,
-    ices: {}
+    ices: {},
+    initial_hash_received: false,
+    intiial_pairs_received: false,
   },
   states: {
     start: {
@@ -78,187 +80,168 @@ export const webrtcManagerMachine = createMachine({
           input: ({ event }) => ({
             ...event
           }),
-        },
-        CURRENT_USERS_SDP: {
-          actions: assign(({event, context, spawn }) => {
-            console.log("--------++++----- CURRENT_USERS_SDP ENVET", event)
-            if (!event.data || event.data.length === 0) {
-              // first member, create placeholder
-              return {
-                ...context,
-              }
-            }
-            let newWebrtcs = { ...context.webrtcs };
-            let hashes = {...context.hashes};
-            event.data.forEach(pair => {
-              console.log("WHAT DO I HAVE HERE???", pair)
-              const { user, sdp, ice, hash } = pair;
-              const pairType = "data"
-              const date = Date.now().toString()
-              const webrtcActor = spawn(
-                createWebRTCConnectionMachine(user, pairType, 'receiver', date, sdp, ice),
-                { name: `webrtc-${user}-${pairType}-${date}` }
-              );
-              newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
-                ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-                [pairType]: webrtcActor
-              };
-              hashes[`webrtc-${user}-${pairType}-${date}`] = hash
-              hashes[hash] = `webrtc-${user}-${pairType}-${date}`
-              // TODO: add callback to parent
-              console.log("WEBRTC SPAWNED CHILD", newWebrtcs, hashes)
-            });
+        }
+      },
+    },
+    connected: {
+      entry: enqueueActions((({ enqueue, event, context }) => {
+        // console.log("========= CONNECTED =========", event, context)
+
+        const ices = context.ices[event.data.origin];
+        enqueue.sendParent(
+          { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
+            ice: ices,
+            hash: event.data.hash,
+        }});
+        enqueue.assign({
+          hashes: ({ context, event }) => {
+            const hash = event.data.hash;
+            const origin = event.data.origin;
+            return { ...context.hashes, [hash]: origin, [origin]: hash};
+          },
+          webrtcs: ({context, event}) => {
+            return {...context.webrtcs, [event.data.origin]: context.placeholder}
+          }
+        })
+        console.log("connected manager machine", context)
+      })),
+      on: {
+        CREATE_CONNECTION: {
+          actions: assign(({context, event, spawn}) => {
+            const { user, pairType } = event;
+            // Spawn a new webrtc connection actor
+            const date = Date.now().toString()
+            const webrtcActor = spawn(
+              createWebRTCConnectionMachine(user, pairType, 'instigator', date),
+              { id: `webrtc-${user}-${pairType}-${date}` }
+            );
             return {
-              ...context,
-              webrtcs: newWebrtcs,
-              hashes: hashes
+              webrtcs: {
+                ...context.webrtcs,
+                [`webrtc-${user}-${pairType}-${date}`]: {
+                  webrtcActor
+                }
+              }
             };
           })
         },
-    },
-  },
-  connected: {
-    entry: enqueueActions((({ enqueue, event, context }) => {
-      // console.log("========= CONNECTED =========", event, context)
-
-      const ices = context.ices[event.data.origin];
-      enqueue.sendParent(
-        { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
-          ice: ices,
-          hash: event.data.hash,
-      }});
-      enqueue.assign({
-        hashes: ({ context, event }) => {
-          const hash = event.data.hash;
-          const origin = event.data.origin;
-          return { ...context.hashes, [hash]: origin, [origin]: hash};
+        MAKE_PAIR: {
+          entry: () => console.log("HERE IN ENTRY OF MAKE PAIR!!!!!!!!\N"),
+          actions: enqueueActions((({ enqueue, event, context }) => {
+            const { hash, sdp, ice } = event.data;
+            const machineName = context.hashes[hash]; // TODO: add some level of fallback?
+            console.log("MACHINE NAME", context.hashes)
+            console.log(context.webrtcs, hash, sdp, ice)
+            const actor = context.webrtcs[machineName]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
+            if (actor) {
+              const payload = { sdp, ice };
+              console.log(actor)
+              enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
+            }
+          }))
         },
-      })
-      console.log("connected manager machine", context)
-    })),
-    on: {
-      CURRENT_USERS_SDP: {
-        actions: assign(({event, context, spawn }) => {
-          console.log("--------++++----- CURRENT_USERS_SDP ENVET", event)
-          if (!event.data || event.data.length === 0) {
-            // first member, create placeholder
-            return {
-              ...context,
+        DISCONNECT_CONNECTION: {
+          actions: (context, event) => {
+            const { user, pairType } = event;
+            const actor = context.webrtcs[user];
+            if (actor) {
+              actor.send('DISCONNECT');
             }
           }
-          let newWebrtcs = { ...context.webrtcs };
-          let hashes = {...context.hashes};
-          event.data.forEach(pair => {
-            console.log("WHAT DO I HAVE HERE???", pair)
-            const { user, sdp, ice, hash } = pair;
-            const pairType = "data"
-            const date = Date.now().toString()
-            const webrtcActor = spawn(
-              createWebRTCConnectionMachine(user, pairType, 'receiver', date, sdp, ice),
-              { name: `webrtc-${user}-${pairType}-${date}` }
-            );
-            newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
-              ...(newWebrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-              [pairType]: webrtcActor
-            };
-            hashes[`webrtc-${user}-${pairType}-${date}`] = hash
-            hashes[hash] = `webrtc-${user}-${pairType}-${date}`
-            // TODO: add callback to parent
-            console.log("WEBRTC SPAWNED CHILD", newWebrtcs, hashes)
-          });
+        },
+        RELAY_VIDEO: {
+          actions: (context, event) => {
+            const { fromPair, toPair, fromType, toType } = event;
+            const sourceActor = context.webrtcs[fromPair]?.[fromType];
+            const targetActor = context.webrtcs[toPair]?.[toType];
+            if (sourceActor && targetActor) {
+              targetActor.send({ type: 'UPDATE', data: { relayFrom: fromPair } });
+            }
+          }
+        },
+        "child.PUSH_PARTIAL_ICE_CANDIDATE": {
+          actions: enqueueActions(({ enqueue, event, context }) => {
+              // console.log("------- ICE PUSH MANAGER MACHINE -----!!!!", event, context)
+              const id = event.message.originId;
+              const hash = context.hashes[id]
+              const candidate = event.message.latestCandidate;
+              enqueue.sendParent(
+                { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
+                  ice: candidate,
+                  hash: hash,
+              }});
+            }
+          ),
+        },
+        "child.NEGOTIATION_RESPONSE": {
+          actions: enqueueActions(({ enqueue, event, context }) => {
+            // console.log("EVENT IN PARENT POST CONNECT", event, context)
+            const hash = context.hashes[event.message.originId]
+            enqueue.sendParent({
+              type: 'child.NEGOTIATION_RESPONSE',
+              message: {
+                sdp: event.message.sdp,
+                ice: event.message.ice,
+                hash: hash
+              }
+            });
+            }
+          ),
+        },
+      }
+    }
+  },
+  on: {
+    CURRENT_USERS_SDP: {
+      actions: assign(({event, context, spawn }) => {
+        // console.log("--------++++----- CURRENT_USERS_SDP ENVET", event)
+        if (!event.data || event.data.length === 0) {
           return {
-            ...context,
-            webrtcs: newWebrtcs,
-            hashes: hashes
-          };
-        })
-      },
-      CREATE_CONNECTION: {
-        actions: assign(({context, event, spawn}) => {
-          const { user, pairType } = event;
-          // Spawn a new webrtc connection actor
+            ...context
+          }
+        }
+        let newWebrtcs = { ...context.webrtcs };
+        let hashes = {...context.hashes};
+        event.data.forEach(pair => {
+          // console.log("WHAT DO I HAVE HERE???", pair)
+          const { user, sdp, ice, hash } = pair;
+          const pairType = "data"
           const date = Date.now().toString()
           const webrtcActor = spawn(
-            createWebRTCConnectionMachine(user, pairType, 'instigator', date),
-            { id: `webrtc-${user}-${pairType}-${date}` }
+            createWebRTCConnectionMachine(user, pairType, 'receiver', date, sdp, ice),
+            { name: `webrtc-${user}-${pairType}-${date}` }
           );
-          return {
-            webrtcs: {
-              ...context.webrtcs,
-              [`webrtc-${user}-${pairType}-${date}`]: {
-                ...(context.webrtcs[`webrtc-${user}-${pairType}-${date}`] || {}),
-                [pairType]: webrtcActor
-              }
-            }
+          newWebrtcs[`webrtc-${user}-${pairType}-${date}`] = {
+            webrtcActor
           };
-        })
-      },
-      MAKE_PAIR: {
-        entry: () => console.log("HERE IN ENTRY OF MAKE PAIR!!!!!!!!\N"),
-        actions: enqueueActions((({ enqueue, event, context }) => {
-          console.log("AAAAAAAAA!!!!!!!", event)
-          const { hash, sdp, ice } = event;
-          const machineName = context.hashes[hash]; // TODO: add some level of fallback?
-          console.log("MACHINE NAME", context)
-          console.log(context.webrtcs)
-          const actor = context.webrtcs[machineName]?.["data"]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
-          if (actor) {
-            const payload = { sdp, ice };
-            console.log(actor)
-            enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
-          }
-        }))
-      },
-      DISCONNECT_CONNECTION: {
-        actions: (context, event) => {
-          const { user, pairType } = event;
-          const actor = context.webrtcs[user]?.[pairType];
-          if (actor) {
-            actor.send('DISCONNECT');
-          }
-        }
-      },
-      RELAY_VIDEO: {
-        actions: (context, event) => {
-          const { fromPair, toPair, fromType, toType } = event;
-          const sourceActor = context.webrtcs[fromPair]?.[fromType];
-          const targetActor = context.webrtcs[toPair]?.[toType];
-          if (sourceActor && targetActor) {
-            targetActor.send({ type: 'UPDATE', data: { relayFrom: fromPair } });
-          }
-        }
-      },
-      "child.PUSH_PARTIAL_ICE_CANDIDATE": {
-        actions: enqueueActions(({ enqueue, event, context }) => {
-            // console.log("------- ICE PUSH MANAGER MACHINE -----!!!!", event, context)
-            const id = event.message.originId;
-            const hash = context.hashes[id]
-            const candidate = event.message.latestCandidate;
-            enqueue.sendParent(
-              { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
-                ice: candidate,
-                hash: hash,
-            }});
-          }
-        ),
-      },
-      "child.NEGOTIATION_RESPONSE": {
-        actions: enqueueActions(({ enqueue, event, context }) => {
-          console.log("EVENT IN PARENT POST CONNECT", event, context)
-          const hash = context.hashes[event.message.originId]
-          enqueue.sendParent({
-            type: 'child.NEGOTIATION_RESPONSE',
-            message: {
-              sdp: event.message.sdp,
-              ice: event.message.ice,
-              hash: hash
-            }
+          hashes[`webrtc-${user}-${pairType}-${date}`] = hash
+          hashes[hash] = `webrtc-${user}-${pairType}-${date}`
+          // TODO: add callback to parent
+          // console.log("WEBRTC SPAWNED CHILD", newWebrtcs, hashes)
+        });
+        return {
+          ...context,
+          webrtcs: newWebrtcs,
+          hashes: hashes
+        };
+      })
+    },
+    ICE_UPDATE_SERVER: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        console.log(`Manager received ICE update for hash: ${event.data.hash}`);
+        const { hash, ice } = event.data;
+        const machineName = context.hashes[hash];
+        const actor = context.webrtcs[machineName];
+        if (actor) {
+          enqueue.sendTo(actor, {
+            type: 'ICE_UPDATE_SERVER',
+            ice: ice,
           });
-          }
-        ),
-      },
+        } else {
+          console.warn(`Could not find a machine for hash: ${hash}`);
+        }
+      })
     }
-  }
   }
 });
 

@@ -101,20 +101,20 @@ const websocketMachine = setup(
       entry: ({ context, self, send }) => {
         console.log('Entered state: connected', context)
         context.channel.on("join_hash", (payload) => {
-          console.log("------- JOIN HASH EVENT -----", payload)
+          // console.log("------- JOIN HASH EVENT -----", payload)
           // self.send({ type: 'PAIRS', data: payload })
           self.send({ type: 'JOIN_HASH', data: payload });
         })
         context.channel.on("sdp_pairs", (payload) => {
-          console.log("------- SDP PAIRS EVENT -----", payload)
+          // console.log("------- SDP PAIRS EVENT -----", payload)
           self.send({ type: 'CURRENT_USERS_SDP', data: payload })
         })
         context.channel.on("pairs", (payload) => {
-          console.log("------- PAIRS EVENT -----", payload)
+          // console.log("------- PAIRS EVENT -----", payload)
           self.send({ type: 'PAIRS', data: payload })
         })
         context.channel.on("ice_update", (payload) => {
-          console.log("------- ICE_UPDATE EVENT -----", payload)
+          // console.log("------- ICE_UPDATE EVENT -----", payload)
           self.send({ type: 'ICE_UPDATE', data: payload })
         })
         context.channel.on("negotiation_response", (payload) => {
@@ -166,18 +166,18 @@ const websocketMachine = setup(
           })
         },
         ICE_UPDATE: {
-          actions: ({ context, event }) => {
+          actions: enqueueActions((({ enqueue, event, context }) => {
             console.log("-------ICE - UPDATE - SERVER --------", event)
-            // TODO: ADD FUNCTIONALITY!!
-          }
+            enqueue.sendTo(context.webrtcManager,{ type: 'ICE_UPDATE_SERVER', data: event.data })
+          }))
         },
         "child.PUSH_PARTIAL_ICE_CANDIDATE": {
           actions: ({ context, event }) => {
-            console.log("PUSH PARTIAL ICE CANDIDATE: Received from child, sending to Phoenix...", event.message);
+            // console.log("PUSH PARTIAL ICE CANDIDATE: Received from child, sending to Phoenix...", event.message);
             const { hash, ice } = event.message;
             if (context.channel && hash && ice) {
               context.channel.push("ice_update", { hash, ice }).receive("ok", (response) => {
-                  console.log("Server ACK'd batched ice_update:", response);
+                  // console.log("Server ACK'd batched ice_update:", response);
                 })
                 .receive("error", (reason) => {
                   console.error("Server rejected batched ice_update:", reason);
@@ -193,11 +193,11 @@ const websocketMachine = setup(
         },
         "child.NEGOTIATION_RESPONSE": {
           actions: ({ context, event }) => {
-            console.log("NEGOTIATION_RESPONSE: Received from child, sending to Phoenix...", event.message);
+            // console.log("NEGOTIATION_RESPONSE: Received from child, sending to Phoenix...", event.message);
             const { hash, ice, sdp } = event.message;
             if (context.channel && hash && ice && sdp) {
               context.channel.push("negotiation_response", { hash, ice, sdp }).receive("ok", (response) => {
-                  console.log("Server ACK'd batched NEGOTIATION_RESPONSE:", response);
+                  // console.log("Server ACK'd batched NEGOTIATION_RESPONSE:", response);
                 })
                 .receive("error", (reason) => {
                   console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
