@@ -20,11 +20,11 @@ defmodule ConferenceWeb.Channel.Room do
     Routing.create_stream(routing_pid, get_stream_type(type), user)
   end
 
-  defp warn_users_they_should_create_new_sdps(users, room, from) do
-    IO.inspect(users, label: "WARNING USERS")
-    IO.inspect({:broadcasting_from_pid, self(), from: from, users_affected: users}, label: "BROADCAST SOURCE")
-    PubSub.broadcast_from(Conference.PubSub, self(), room, {:update_data_channel_sdp, %{users_affected: users, from: from}})
-  end
+  # defp warn_users_they_should_create_new_sdps(users, room, from) do
+  #   IO.inspect(users, label: "WARNING USERS")
+  #   IO.inspect({:broadcasting_from_pid, self(), from: from, users_affected: users}, label: "BROADCAST SOURCE")
+  #   PubSub.broadcast_from(Conference.PubSub, self(), room, {:update_data_channel_sdp, %{users_affected: users, from: from}})
+  # end
   def join(room, _params, socket) do
     IO.puts("join")
     IO.inspect(room, label: "ROOM IN JOIN!!")
@@ -32,8 +32,9 @@ defmodule ConferenceWeb.Channel.Room do
     # {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online", pid: self()})
     {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online"})
     {routing_pid, peerfinding_pid} = get_state_pids(room)
-    hash = Peers.generate_hash(socket.assigns.user)
-    current_users = Peers.join_negotiation(peerfinding_pid,hash, socket.assigns.sdp, self(), "data", false, socket.assigns.user)
+    # hash = Peers.generate_hash(socket.assigns.user)
+    # hash, sdp, channel_pid, connection_type, refill, name, opts
+    current_users = Peers.join_negotiation(peerfinding_pid,socket.assigns.hash, socket.assigns.sdp, self(), "data", false, socket.assigns.user)
     users = Enum.reduce(current_users, [], fn {_key, %{name: user}}, acc ->
       [ user | acc ]
     end)
@@ -42,9 +43,9 @@ defmodule ConferenceWeb.Channel.Room do
     |> assign(:sdp_pairs, current_users)
     |> assign(:room, room)
     |> assign(:pairs, users)
-    |> assign(:hash, hash)
+    # |> assign(:hash, hash)
 
-    warn_users_they_should_create_new_sdps(users, socket.assigns.room, socket.assigns.user)
+    # warn_users_they_should_create_new_sdps(users, socket.assigns.room, socket.assigns.user)
     # IO.inspect(socket, label: "room.ex: User #{socket.id} - Room #{room} // after changes to subscription")
     send(self(), :after_join)
     ############# IMPORTANT!!!!!!!
@@ -76,10 +77,11 @@ defmodule ConferenceWeb.Channel.Room do
   defp check_and_cleanup_room(room) do
     presences = Conference.Presence.list(room)
     room_presences = Map.get(presences, "room:" <> room, %{metas: []})
+    IO.inspect(room_presences, label: "ROOM PRESENCE!")
     case Enum.empty?(room_presences.metas) do
       true ->
-        IO.puts("Room #{room} is empty. Cleaning up resources.")
-        stop_room_genservers(room)
+        IO.puts("Room #{room} is empty. Would delete....")
+        # stop_room_genservers(room)
         :deleted
       false ->
         :active
@@ -94,7 +96,6 @@ defmodule ConferenceWeb.Channel.Room do
       GenServer.stop(peerfinding_pid)
     end
   end
-
   # Messages from server: Broadcasts, direct messages
   def handle_info(:after_join, socket) do
     # IO.inspect(socket, label: "room.ex: handle_info/2 - :after_join")
@@ -103,7 +104,11 @@ defmodule ConferenceWeb.Channel.Room do
     end)
     push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
     push(socket, "pairs", %{"pairs" => socket.assigns.pairs})
-    push(socket, "join_hash", %{"hash" => socket.assigns.hash, "origin" => socket.assigns.origin})
+    # push(socket, "join_hash", %{"hash" => socket.assigns.hash, "origin" => socket.assigns.origin})
+    Enum.map(socket.assigns.sdp_pairs, fn
+      {hash, %{creator_pid: creator_pid}} ->
+        send(creator_pid, {:private_message, %{protocol: :new_webrtc_required, from: socket.assigns.user}})
+    end)
     {:noreply, socket}
   end
   def handle_info({:user_left, data}, socket) do
@@ -116,11 +121,11 @@ defmodule ConferenceWeb.Channel.Room do
     socket = assign(socket, :sdp_pairs, current_hashes) |> assign(:pairs, users)
     {:noreply, socket}
   end
-  def handle_info({:update_data_channel_sdp, %{users_affected: users, from: from}}, socket) do
-    IO.inspect({:handle_info_in_pid, self(), user: socket.assigns.user, from: from}, label: "BROADCAST RECIPIENT")
-    if Enum.member?(users, socket.assigns.user), do: push(socket, "new_data_webrtc_required", %{})
-    {:noreply, socket}
-  end
+  # def handle_info({:update_data_channel_sdp, %{users_affected: users, from: from}}, socket) do
+  #   IO.inspect({:handle_info_in_pid, self(), user: socket.assigns.user, from: from}, label: "BROADCAST RECIPIENT")
+  #   if Enum.member?(users, socket.assigns.user), do: push(socket, "new_data_webrtc_required", %{})
+  #   {:noreply, socket}
+  # end
   def handle_info({:get_new_streamer, %{type: type, stream: stream_user, recommendations: recommendation}}, socket) do
     IO.inspect({:handle_info_in_pid, self(), socket.assigns.user}, label: "BROADCAST NEW STREAMER RECIPIENT")
     if type in @available_types do
@@ -133,8 +138,14 @@ defmodule ConferenceWeb.Channel.Room do
     end
     {:noreply, socket}
   end
+  def handle_info({:private_message, %{protocol: :new_webrtc_required, from: user}}, socket) do
+    IO.inspect(%{protocol: :new_webrtc_required, from: user}, label: "Received message from user")
+    socket = assign(socket, :pairs, [ user | socket.assigns.pairs ])
+    push(socket, "new_webrtc_required", %{})
+    {:noreply, socket}
+  end
   def handle_info({:private_message, %{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: user}}, socket) do
-    IO.inspect(%{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: user}, label: "Received message from user")
+    # IO.inspect(%{protocol: :pair_request, hash: hash,sdp: sdp, ice: ice, user: user}, label: "Received message from user")
     push(socket, "negotiation_response", %{"hash" => hash, "sdp" => sdp, "ice" => ice})
     socket = assign(socket, :sdp_pairs, Map.put(socket.assigns.sdp_pairs, hash, %{user: user})) |> assign(:pairs, [user | socket.assigns.pairs])
     {:noreply, socket}
@@ -145,7 +156,7 @@ defmodule ConferenceWeb.Channel.Room do
     {:noreply, socket}
   end
   def handle_info({:private_message, %{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}}, socket) do
-    IO.inspect(%{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}, label: "Received message from user")
+    # IO.inspect(%{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}, label: "Received message from user")
     push(socket, "finish_webrtc", %{"hash" => hash, "ice" => ice, "sdp" => sdp})
     {:noreply, socket}
   end
@@ -171,7 +182,6 @@ defmodule ConferenceWeb.Channel.Room do
     {:noreply, socket}
   end
   def handle_in("negotiation_response", %{"sdp" => sdp, "hash" => hash , "ice" => ice}, socket) do
-    IO.inspect("STOP! WE REACHED HERE...")
     case Map.get(socket.assigns.sdp_pairs, hash) do
       nil -> {:reply, :error, socket}
       map ->
@@ -182,7 +192,7 @@ defmodule ConferenceWeb.Channel.Room do
   def handle_in("ice_update", %{"hash" => hash, "ice" => ice}, socket) do
     # IO.inspect(%{"hash" => hash, "ice" => ice}, label: "Handle IN")
     {term, response} = Peers.update_ice(socket.assigns.peerfinding_pid, hash, ice, self())
-    IO.inspect({term, response}, label: "Here")
+    # IO.inspect({term, response}, label: "Here")
     {:reply, term, socket}
   end
   def handle_in("finish_webrtc", %{"hash" => hash, "ice" => ice, "sdp" => sdp}, socket) do
@@ -191,21 +201,23 @@ defmodule ConferenceWeb.Channel.Room do
     send(peer.creator_pid, {:private_message, %{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}})
     {:reply, :ok, socket}
   end
-  def handle_in("new_webrtc", %{"sdp" => sdp}, socket) do
-    hash = Peers.generate_hash(socket.assigns.user)
+  def handle_in("new_webrtc", %{"sdp" => sdp, "hash" => hash}, socket) do
+    # hash = Peers.generate_hash(socket.assigns.user)
     peerfinding_pid = socket.assigns.peerfinding_pid
+    # hash, sdp, channel_pid, connection_type, refill, name, opts
+    IO.inspect(socket.assigns.pairs, label: "SENDING THESE PAIRS")
     current_users = Peers.join_negotiation(peerfinding_pid, hash, sdp, self(), "data", true, socket.assigns.user, socket.assigns.pairs)
+    IO.inspect(current_users, label: "Inspecting sdp_pairs in socket", pretty: true, limit: :infinity)
     sdp_pairs = Enum.reduce(socket.assigns.sdp_pairs, [],fn {hash, %{name: user, sdp: sdp, ice: ice}}, acc ->
       [%{hash: hash, user: user, sdp: sdp, ice: ice}  | acc]
     end)
     push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
-    # push(socket, "join_hash", %{"hash" => hash})
     users = Enum.reduce(current_users, [], fn {_key, %{name: user}}, acc ->
       [ user | acc ]
     end)
     push(socket, "pairs", %{"pairs" => users})
     socket = assign(socket, :pairs, socket.assigns.pairs ++ users) |> assign(:sdp_pairs, Map.merge(socket.assigns.sdp_pairs, current_users))
-    {:reply, :ok, hash, socket}
+    {:reply, :ok, socket}
   end
   def handle_in("connection_quality", %{"target" => target, "weight" => weight}, socket) do
     router = socket.assings.routing_pid

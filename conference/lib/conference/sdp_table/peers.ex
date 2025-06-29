@@ -93,14 +93,14 @@ defmodule Conference.SdpTable.Peers do
         entry = state.pending[hash]
         updated_entry = Map.update!(entry, :ice, fn existing_ice ->
           normalized_new_ice = List.wrap(new_ice)
-          normalized_new_ice ++ existing_ice
+          (normalized_new_ice ++ existing_ice) |> Enum.uniq()
         end)
         new_pending = Map.put(state.pending, hash, updated_entry)
         # IO.inspect(new_pending, label: "New pending entry")
         {:reply, {:ok, :success}, %{state | pending: new_pending}, @timeout}
 
       true ->
-        IO.inspect("ERROR in handle call of PEERS ICE UPDATE")
+        IO.inspect({:update_ice, hash, new_ice, user_pid}, label: "ERROR in handle call of PEERS ICE UPDATE")
         {:reply, {:error, :not_found}, state, @timeout}
     end
   end

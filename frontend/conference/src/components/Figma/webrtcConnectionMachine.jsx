@@ -1,18 +1,33 @@
-import { createMachine, assign, setup, sendParent, enqueueActions, fromPromise } from 'xstate';
+import { createMachine, assign, setup, sendParent, enqueueActions, fromPromise, fromCallback, stopChild, sendTo } from 'xstate';
 
-
-// function createOfferNegotiation(peerConnection) {
-//     return peerConnection.createOffer()
-//       .then(offer => peerConnection.setLocalDescription(offer));
-// }
-
-// async function createAnswerAndSetCandidates({peerConnection, offerSdp, iceCandidates}) {
-//     await peerConnection.setRemoteDescription(offerSdp);
-//     await Promise.all(iceCandidates.map(candidate => peerConnection.addIceCandidate(candidate)));
-//     const answer = await peerConnection.createAnswer();
-//     await peerConnection.setLocalDescription(answer);
-//     return peerConnection.localDescription;
-// }
+const connectionMonitorLogic = fromCallback(({ sendBack, input }) => {
+    const { peerConnection } = input;
+    console.log('✅ Unified Connection Monitor has STARTED!');
+  
+    const monitorAndPing = () => {
+      if (!peerConnection || peerConnection.connectionState !== 'connected') return;
+      peerConnection.getStats().then(stats => {
+        let metrics = { availableBitrate: null };
+        // console.log("Got stats", stats)
+        for (const report of stats.values()) {
+          if (report.type === 'candidate-pair' && report.nominated === true) {
+            metrics.availableBitrate = report.availableOutgoingBitrate;
+            break;
+          }
+        }
+        // Send the stats back to the machine
+        sendBack({ type: 'STATS_UPDATED', data: metrics });
+      }).catch(error => {
+        console.error("Error polling getStats:", error);
+      });
+      sendBack({ type: 'TRIGGER_PING' });
+    };
+    const intervalId = setInterval(monitorAndPing, 3000);
+    return () => {
+      console.log('🛑 Unified Connection Monitor has STOPPED.');
+      clearInterval(intervalId);
+    };
+});
 
 async function setAnswerAndCandidates({ peerConnection, sdp, ice }) {
     if (!peerConnection || !sdp) {
@@ -59,17 +74,20 @@ async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandi
     return peerConnection.localDescription;
 }
 
-export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp, offerSdp = "",ice = []) =>
+export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp, hash = "", offerSdp = "",ice = []) =>
   setup(  {
     actions: {
       createWebRTCObject: assign(({context, event, self}) => {
         const peerConnection = new RTCPeerConnection(context.configuration);
         const setupDataChannelListeners = (channel) => {
             channel.onmessage = (event) => {
-              console.log('Data channel message received:', event.data);
+            //   console.log('Data channel message received:', event.data);
               self.send({ type: 'DATA_RECEIVED', data: event.data });
             };
-            channel.onopen = () => console.log('Data channel opened!');
+            channel.onopen = () => {
+                console.log('--------- Data channel has opened! --------- ', context.name);
+                self.send({ type: 'DATA_CHANNEL_READY' });
+            };
             channel.onclose = () => console.log('Data channel closed!');
           };
         let dataChannel;
@@ -93,10 +111,11 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
         console.log(`Cleaning up connection for ${context.pairName} (${context.pairType})`);
       },
       pushPartialSDP: enqueueActions(({ context, enqueue, event }) => {
+            // console.log("--------------- PUSH PARTIAL SDP EVENT", event, context)
             enqueue.sendParent(
                 { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
                     latestCandidate: event.candidate,
-                    originId: event.originId
+                    hash: context.name
                 }
             }
             );
@@ -108,10 +127,11 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
         createOffer: fromPromise(( peerConnection ) => createOfferPromise(peerConnection)),
         createAnswer: fromPromise(({input}) => createAnswerAndSetCandidates(input)),
         setAnswer: fromPromise(({ input }) => setAnswerAndCandidates(input)),
+        connectionMonitorLogic,
     }
   }).
   createMachine({
-    /** @xstate-layout N4IgpgJg5mDOIC5QAoC2BDAxgCwJYDswBKAYgEkBhAUQH0BVABQBEBBAFVoGUqAlANV4BtAAwBdRKAAOAe1i4ALrmn4JIAB6IAHAHZNAOgBM27cIBspgKwBGAxYDM2gCwAaEAE9EAWk0G9ATmE-bT8-C2FHTU07U00AX1jXNCw8QiI9ABtpdAgCKBIRcSQQGTlFZVUNBFtfRytTOsdtO0iI7QtXDwRHA0c9YWCHC1DIi1H4xIwcAmIMrJz8PMErQqlZBSUVIsq7YQs9awtTRztG-r9m0w6tP30TCybNM1CYi3GQJKnUvUIoaUV0RQLPRQAHYMAAJ1yAHkAGYwiEkCDKMB6AgAN2kAGsUR8UjMfn9cADcsDQRDoXCIQh0dJMMTlAUCqoSutyltEKZtL5bMJef0uRYDHYDFcEPZhHorH4DKY7HY-BFLMY3rjpmkCf9AVBSfIwZCFrD4eCSBDwdJwXpJOkATDzag9KqvhqiVqdXqKUbqfgMXSyvhGWJmWs-RUOVzDGE+cZqsLRUY-HpHGYrJoLBF+o4YirJnj1WBfpqSQB3dDrBYAMXNLHwsCLCMotAoLAAckwyKwOEyiiyQ+yEKntH1zk0DAYrK1HO13IhHN1DCFojzNDFJ9nkmrvvnCcSgSWy1BK+Dq7WEQBZFgAaVoDBYZB4XdWpQ2oYQVmEDn2ph6fisYRsoRcacxXMPQ2lsI4DEiJxgjXT58S3QsgVgMB5C1Y862NJFCFRb0sRxHMN2dHdtWQ1DcnQqkaV9DYAxWYpg2fPsrCcfRuhTX8x2aYVNFFCxlz0KI+PsG5tCsGxTFg3NNwLF0SVItCawwk1wTNC0rRtO0HQIp0ENkpCUIUk9wS9H16X9MQH3op82VASorGaKxJSOd8v3sQVhBFIC2L0WUjEzVM6huSTCN04ieDATAwFwNEESwlFYHkAF8PXHSZLCiKopi8FLJ7RjbMQMSwn8McFR-TlTECUVNCCfxRhMTNDheRxgtS7ctXCyLoohPRMHBMBiIozDkRwjFsS0lL4LS9qMq6i1ev6wyMJM2kzNooNrM2fKEFE-RpT8cxOVEwJQlFc5HMaH8FUGDzLBaya2tyDrMu6+aBsUhFTXNS1rXkW1wXtR17sQqAntmnq+reozluohkLMDbsGJs9REBMQc0zHHRIOlTQ6lFN80z6GIQiOep-LuvMpsemasrdckFgodB8ByCAktgchqBoJtW3bdgqByxHNuRhA9r0BxquMNMlV-KqhgjWxHnlX9HmahJ3m0oG9JB6nupBXU6agBmmdwFn5DgEgKChZtmyoCgOCYfmNpfBUJXqLl5QMH9mNGKrhFuQV7h0KUuUCcmeuUQhMFNiASA7FhOYACRba2ABkaChBgqGt+34cfVlBbsmw8aOfRfc0CIejHe4gtVwG0kwcOIqjkhGA7Pmc6svOXxOQdhClUYzF0fb7jxy7PzCOVGkcG46lD+v8Ajpu204C2rZttgHc7vsHgE6xLB8faTEsPGuVMQmwnsFdqoiWeG8jyAerBTBMVyQ8mABdAKGwRnCHSfJ29ypG2x5T7A8iYeMaYy5+GPgTHY3QuQiQ9rsG+89G73xwBFZ+FZzRv0Sp-b+YBf5LDogA-OiA7CHB8r3IYJxZSiSTIBTo7FBx2F-GYboFVLC3RrurOut8o56CLAobAOCP5fxQb-bgrYaCnioJwTgLAADibdiECxfO5SU9l5TNFGKmXueMhIaKlNKKU9lxxWGQQve+gjdQiLweImO7A448BtlQMgAhs4qMdn2awCZSrCnoZyHGPEgLjkiD5Pi1VqoBEFNoCSbx8DSAgHAVQtd1qby2p4SckpDipjlO5Qe2g8bhETGYAwgQUxlwOCrCYE00iZGyLkNJvYtq+DLiwzMRxghjnfOOUUDhT5-l-PKd8gQjBxJqXBCmD0FhNLykLbo3IeknGFP3SqISfz+GTPtII9gbBclDkRV0ut3QGkpOCWZgCZwmEMEs44thIxQK8jVX2fEYjFxxgBA5oVXR7i1IeQaFzSH9kFIYSwQx6hvm-MEzoaY7CgX9g4HYVd7BfMpvpMiCwAUIy8VtMSZdEzGKOI0SwY5eI7HhT0EY1R6ivG4bU6S0ztQwlLOkSAgKXy-gJv5EwYle6xMiKKJMcLyHnF2Jyc+5DUWMtBlldlfZJy9HIb+ccxjxaPM6JyXo1R7iwsHpKulkyGXAxlS9CGi0IRyq2mEXwSrrBTwxkEdViAFRat2E0YOvJDjmINVJQ5VNOo02OfrQ2zNWaWqFj+OFxKvw-n6MKEIp0KqgTdaMCppgfxSuNdrC0n1znYvSRG+yiZYkxrfCOBNISPK+CVjoJUO05ShxyLAOeliIDhsqAERybQBhCnMEYHQx9e4CVYQPGwfdxlq3pS21Bbb83NKFkcPG5Deg1tCCYHQvJvUTKktOu+EAH4YJftg9+dif7toKlKIcYtwjHF2HUaFBVHgJlCWLTkOwxzVMnYa3d-DrHCJPWIs9c65mVB8Ymfp9lAiPFEoUkJbyx4vPdm+MwFiZ3fGkLYwDBDz1ikvccWJkGbj9GYsfaUZ9dhXWXWJeI8QgA */
+    /** @xstate-layout N4IgpgJg5mDOIC5QAoC2BDAxgCwJYDswBKAYgEkBhAUQH0BVABQBEBBAFVoGUqAlANV4BtAAwBdRKAAOAe1i4ALrmn4JIAB6IAjACZNATgB0AVj2bNADmHmAzNZMA2ACwAaEAE8t2gL5fXaLHiERAYANtLoEARQJCLiSCAycorKqhoI1sJGxsLaRgDs1ua5RuZ59vauHgiOuQbaBUb1mtYWlpqOPn4YOATEoeGR+NGCmnFSsgpKKvFpGVlGOfmFxaXllYh55oZ6Rkb2ejV5eY52eZ0g-j1BBoRQ0oroikMGUI-YYABOUQDyAGa-nxIEGUYAMBAAbtIANagy6BPq3e64R5RF5vT4-f6fBAQ6SYFHKWKxVSJSYpGaIex5TTZRqafZmer2IzrBCNPIGemOLZ6QpGCx5IznOG9YKIh5PKBo+TvL5DP4Aj4kT4faQfAySEKPX5q1AGEXXcXIyXS2WYxU4-CQ-HJfBEsQkia21KU6m03QMnRlFnuRD1Dn8vbCI57fT2YXdeFisB3CWogDu6EmQwAYmqWPhYPHAZRaBQWAA5JhkVgcYnxUnOikIcy7Ax6PTBnb5EoZFy+6rWba2ey17TWbQncyaM6+C6R0U3GNIlHPRPJqBpj4ZrOAgCyLAA0rQGCwyDxy+MklMXQhNMJrPZOcJ2uZuXYinfWXtrAYTtpB7sjI5Ntpw2ODQRac42eWAwHkSUV2zJVgUIMErWhWEJ0NYDjVRMCIKiKDsVxG0pntMYEidE9qxHRx5m0WsqRqbRGxKZ8bDfO9L12cwGX7CMAknI1ZylDDIMzaDlQ+VV1U1bVdX1ZCgNjNDQPAgTVw+S1rQJO0xEPIjj3JUA0maTZ6z0XRBUcHQBVZUzDGaIyilsA5G00TirhkmdJR4MBMDAXBwUBWDQVgeRHiQriUNk3j3M87zPk0ysSN0rRNG-N97GERs7O-Rx7G0Vk8gOYxzwZE5+Qvf8uhClyQKgCKvJ89VMA+MBeOwmCQXgyEYSk8rozCtyPJqz4DHqxrFOglS8TUgjHW06Z4oQalzE5O873sAdErKPRWT0O8DAvC9cicFotqFADpO61yomqqK6oaprBMBFU1Q1LV5B1D49UAs7Ksu2rBpukacIQvDCQ0h0K2InT1A2CxFu5TLVvyfZWUsDlzFrE49E2ekb28E6uqnHqLr6q7TQxIYKHQfBIggILYHIagaHzIsS3YKgYvBmbIYQGy6kFBtcn7RwDnMTadDfHJKNMxwaO5Jyo3x86hm+gbXhlUmoHJyncGp+Q4BIChvgLAsqAoDgmDZ6bTzMJLMtSi8uwyrLWXPUXBZSr0bEx46yuc4JMGUQhMB1iASFLFgGYACULI2ABkaG+BgqCNs3QaPMkOb0nZDB-e3Gl7GoKg7Y5tAMTYjC7Kkyh0cxZcnP38ADoOSEYUtWZTrS09PD99jqLbEtsaw8ko4R2yqZ3X3FzLBaMgf9hr6464byAQ7ITh9cN422HNjvq3yJ3rFMkunCpFp9mZRo576BePKDwb3kwKEoiXJhHnQChsApwgQhiNvYohtIPwvAYQo4snCWDLiOJGmR6zNGEDePONhaIX19v7a+kBb4eQfqmNUz9Apvw-mAL+IxCK-3Tn6bQgDgFd25JkFoeQRY0l0IOY4zJ96bFHN7OWV9A5oPjAobAODX7v3rgQkg3Aiw0DXFQTgnAWAAHFW7EPZp3S8V5BalEoqjXszRhYdl7MITkWjBxFFyCfJBg0UHcIgAYXhMoBF4OEV-UONAeDGyoGQAQydFEW2rP2coQC7AY2-LRfsNgGKOGgS0YQzJmiJX-GOfA0gIBwFUB9Ka29ZoAFpNBOxyAYNiGMsq5CWgOPQZiwgRCiGkqss0fw5QWHUQWJhawD3qNXXGPt5aVSqXFTmNQaTZx2FE+kKVyE+lHo2TkRlqKXksMPDo7S5Y8RNCrM08osQfG6X-RAmUs4FEGfYYZORMgWV5MYHYaNEq5Fgew8ceMlkJiTJKJczVNmkJrPUx8UTGhSycNlDs359GtFyvkQWfIbkfU6XJPiCksJ3Q2WDbxs0zBFH8Xeb8g9YHl2fPUSZ9sji8lRrYMx9zni-CTCESArzLa7BpA4YoI52jDz+VURwsCxZl3IQPAoejwWnUheFImtUqXVnIq+QpA8TAmFotyVkVJ9H3gKsfMuA9iWoQFZFH6Q1bpKWFbNBYNJxW8ylULJG5Cdq8wKsPLY8yOHcTVb1DVyt0RynVhTKmNNdWc1MMXC8jZWUlAvOAnJotmTHF5HoA5K1yKqoJorQVA0HrwtTtUr1otfXD0yJYOwLRIHhIOSURoXKGwqoWZOSIsAuFB09f-fQdRmgvnPDYKJGM94jh5mUY4lgMZsV5XjStlKEXpM5voMwb49m7D-HeP8Fl6mbByFsUoGMDj7zMf2qxOAMGP2wS-exn9q1aAjVkLYA4spHKsJlTauTqQaIxh6fOq6LE3xsfwndQi92DpTf-FiTEI0C19dSAuVQ51vn7PyOiCxmkPuEZYm40g7FvoIfuhAvisjcl-fvf99Ika1hLh+WZgZT6jh8EAA */
     id: `webrtc-${pairName}-${pairType}-${timestamp}`,
     initial: 'loading',
     context: {
@@ -122,10 +142,13 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
       pairName: pairName,
       pairType: pairType,
       timestamp: timestamp,
-      name: `webrtc-${pairName}-${pairType}-${timestamp}`,
+      name: hash,
       ice: ice,
       mode: mode,
       offerSdp: offerSdp,
+      rtt: null,
+      qualityMetrics: null,
+      qualityMonitorRef: undefined,
       configuration: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
     },
     states: {
@@ -154,7 +177,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         context.peerConnection.onicecandidate = (e) => {
                             // console.log("---------ICE CANDIDATE--------", e)
                             if (e.candidate) {
-                              self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, originId: context.name });
+                              self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, hash: context.name });
                             }
                         };
                         context.peerConnection.addEventListener('connectionstatechange', event => {
@@ -168,7 +191,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         enqueue.sendParent({ type: 'child.SDP_VALUE', message: {
                             sdp: event.output,
                             format: context.pairType,
-                            originId: context.name
+                            hash: context.name
                         }})
                       }),
                   },
@@ -207,7 +230,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 type: 'final',
                 entry: sendParent(({ context }) => ({
                   type: 'child.CONNECTION_FAILED',
-                  originId: context.name
+                  hash: context.name
                 }))
               }
             }
@@ -236,12 +259,12 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         message: {
                           sdp: event.output,
                           ice: context.ice,
-                          originId: context.name
+                          hash: context.name
                         }
                       });
                       context.peerConnection.onicecandidate = (e) => {
                         if (e.candidate) {
-                          self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, originId: context.name });
+                          self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, hash: context.name });
                         }
                       };
                     //   context.peerConnection.onicegatheringstatechange = (e) => {
@@ -294,7 +317,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 }
                 enqueue.sendParent({
                   type: 'child.DISCONNECTED',
-                  originId: context.name
+                  hash: context.name
                 });
               })
         },
@@ -310,23 +333,86 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 ]
               },
               withDataChannel: {
-                entry: () => console.log('Connection is data-enabled.'),
-                on: {
-                  SEND_MESSAGE: {
-                    actions: ({ context, event }) => {
-                      if (context.dataChannel?.readyState === 'open') {
-                        console.log('Sending message:', event.data);
-                        context.dataChannel.send(event.data);
-                      } else {
-                        console.warn('Could not send message, data channel is not open.');
+                initial: 'opening',
+                states: {
+                  opening: {
+                    entry: () => console.log('Data channel is opening...'),
+                    on: {
+                      DATA_CHANNEL_READY: {
+                        target: 'ready'
                       }
                     }
                   },
-                  DATA_RECEIVED: {
-                    actions: ({ event }) => {
-                      console.log(`Processing received data: ${event.data}`);
+                  ready: {
+                    entry: enqueueActions(({ context, enqueue, self })  => {
+                        console.log('Connection is data-enabled. ');
+                        self.send({ type: 'TRIGGER_PING' });
+                        enqueue.assign({
+                            qualityMonitorRef: ({ spawn, context }) => {
+                              return spawn('connectionMonitorLogic', {
+                                input: { peerConnection: context.peerConnection }
+                              });
+                            }
+                        })
+                    }),
+                    exit: stopChild(({ context }) => context.qualityMonitorRef),
+                    on: {
+                        TRIGGER_PING: {
+                            actions: ({ context }) => {
+                              const startTime = performance.now();
+                            //   console.log(`Sending ping with timestamp: ${startTime}`);
+                              if (context.dataChannel?.readyState === 'open') {
+                                context.dataChannel.send(JSON.stringify({ type: 'ping', sent: startTime }));
+                              }
+                            }
+                        },
+                        SEND_MESSAGE: {
+                            actions: ({ context, event }) => {
+                                if (context.dataChannel?.readyState === 'open') {
+                                    // console.log('Sending message:', event.data);
+                                    const message = { type: event.data.type, data: event.data.message };
+                                    context.dataChannel.send(JSON.stringify(message));
+                                } else {
+                                    console.warn('Could not send message, data channel is not open.');
+                                }
+                            }
+                        },
+                        DATA_RECEIVED: {
+                            actions: ({ self, context, event }) => {
+                                try {
+                                    // console.log("------- AAAAAAAA -----", event)
+                                    const message = JSON.parse(event.data);
+                                    switch (message.type) {
+                                        case 'ping':
+                                            if (context.dataChannel?.readyState === 'open') {
+                                                context.dataChannel.send(JSON.stringify({ type: 'pong', originalSentTime: message.sent }));
+                                            }
+                                            break;
+                                        case 'pong':
+                                            self.send({ type: 'PONG_RECEIVED', sentTime: message.originalSentTime });
+                                            break;
+                                        default:
+                                            console.log('Received unhandled message type:', message.type);
+                                        break;
+                                    }
+                                } catch (e) {
+                                        console.error("Received non-JSON data channel message:", event.data);
+                                }
+                            }
+                        },
+                        PONG_RECEIVED: {
+                            actions: [
+                              ({ event }) => {
+                                const rtt = performance.now() - event.sentTime;
+                                // console.log(`%c[RTT Check] RTT: ${rtt.toFixed(2)}ms`, 'color: green');
+                              },
+                              assign({
+                                rtt: ({ event }) => performance.now() - event.sentTime
+                              })
+                            ]
+                        },
                     }
-                  }
+                  },
                 }
               },
               noDataChannel: {
@@ -339,6 +425,40 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                   dataChannel: ({ event }) => event.channel
                 }),
                 target: '.withDataChannel'
+              },
+              STATS_UPDATED: {
+                actions: [
+                  ({ event, context }) => {
+                    const { availableBitrate } = event.data;
+                    if (availableBitrate !== null) {
+                      const bitrateMbps = (availableBitrate / 1_000_000).toFixed(2);
+                    //   console.log(`%c[Stats Check] Available Bandwidth: ${bitrateMbps} Mbps - ${context.name}`, 'color: blue');
+                    }
+                  },
+                  assign({ qualityMetrics: ({ context, event }) => ({...context.qualityMetrics, ...event.data}) })
+                ]
+              },
+              QUALITY_UPDATED: {
+                actions: [
+                  ({ event, context }) => {
+                    const { roundTripTime, availableBitrate } = event.data;
+                    
+                    if (roundTripTime !== null && availableBitrate !== null) {
+                      // Convert bitrate to Megabits per second (Mbps) for easier reading
+                      const bitrateMbps = (availableBitrate / 1_000_000).toFixed(2);
+                    //   console.log(
+                    //     `%c[Quality Check] RTT: ${roundTripTime.toFixed(0)}ms, Available Bandwidth: ${bitrateMbps} Mbps ${context.name}`, 
+                    //     'color: blue'
+                    //   );
+                    } else {
+                    //   console.log(`%c[Quality Check] Waiting for active network path to be nominated...`, 'color: orange');
+                    }
+                  },
+                  // Also, save the metrics to the context for later use
+                  assign({
+                    qualityMetrics: ({ event }) => event.data
+                  })
+                ]
               },
               UPDATE: {
                 actions: 'handleUpdate'
@@ -357,6 +477,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                     }
                 }),
                 ({ context, event }) => {
+                    console.log("Received ice update from server")
                     if (context.peerConnection && context.peerConnection.remoteDescription) {
                         console.log("Connection is ready, adding trickle ICE candidate immediately.");
                         const newCandidates = Array.isArray(event.ice) ? event.ice : [event.ice];
