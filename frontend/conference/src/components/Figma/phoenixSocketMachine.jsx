@@ -300,6 +300,40 @@ const websocketMachine = setup(
         }
       }
     },
+    "child.ADD_MEDIA": {
+      actions: ({ context, event, self }) => {
+        console.log("---- CALLED ADD MEDIA ----")
+        if (context.channel && context.channel.canPush()) {
+          console.log('Channel is ready. Adding stream...');
+          const { type } = event.message;
+          context.channel.push("add_stream", { type })
+            .receive("ok", (resp) => {
+              console.log("Server ACK'd add_stream:", resp)
+            })
+            .receive("error", (reason) => console.error("Server rejected ice_update:", reason));
+          return;
+        }
+        const retryCount = event.message.retryCount || 0;
+    
+        if (retryCount < 2) {
+          const nextAttempt = retryCount + 1;
+          console.warn(`Channel not ready. Scheduling retry ${nextAttempt}/2 in 2 seconds...`);
+    
+          const nextEvent = {
+            ...event,
+            message: {
+              ...event.message,
+              retryCount: nextAttempt,
+            },
+          };
+          setTimeout(() => {
+            self.send(nextEvent);
+          }, 1000);
+        } else {
+          console.error(`Failed to add stream type. Channel not available after 3 attempts.`);
+        }
+      }
+    },
   }
 });
 

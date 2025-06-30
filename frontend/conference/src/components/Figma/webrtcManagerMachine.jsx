@@ -1,4 +1,4 @@
-import { createMachine, assign, spawnChild, enqueueActions } from 'xstate';
+import { createMachine, assign, spawnChild, enqueueActions, sendParent, sendTo } from 'xstate';
 import createWebRTCConnectionMachine  from './webrtcConnectionMachine';
 
 export const webrtcManagerMachine = createMachine({
@@ -14,8 +14,8 @@ export const webrtcManagerMachine = createMachine({
     user: false,
     camera: false,
     microphone: false,
-    stream: null,
     sharing: false,
+    stream: null,
     screenSharing: null,
     users: {}
   },
@@ -23,16 +23,18 @@ export const webrtcManagerMachine = createMachine({
     start: {
       on: {
         CREATE_PLACEHOLDER_CONNECTION: {
-          actions: assign(({context, spawn}) => {
+          actions: [assign(({context, spawn}) => {
             // Spawn a new webrtc connection actor
             const date = Date.now().toString()
             const newWebrtcs = {...context.webrtcs}
             const hash = `webrtc-${date}-data-${date}`
+            const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
             const webrtcActor = spawn(
-              createWebRTCConnectionMachine(date, 'data', 'instigator', date, hash),{ name: hash })
+              createWebRTCConnectionMachine(date, 'data', 'instigator', date, hash,"", [], false, opts),{ name: hash })
             newWebrtcs[hash] = webrtcActor
             const users = {...context.users}
             users[hash] = {actor: webrtcActor, user: "", status: "loading", type: "data"}
+            console.log("------- TRYING MEDIA UPDATE IN WEBACTOR", webrtcActor)
             return {
                 ...context,
                 webrtcs: newWebrtcs,
@@ -40,6 +42,7 @@ export const webrtcManagerMachine = createMachine({
               }
             }
           )
+        ]
         },
         "child.SDP_VALUE": {
           actions: enqueueActions(({ enqueue, event }) => {
@@ -53,54 +56,63 @@ export const webrtcManagerMachine = createMachine({
               );
             }
           ),
+          target: 'connected'
         },
       },
     },
     connected: {
       entry: enqueueActions((({ enqueue, event, context, self }) => {
         console.log("connected manager machine", context)
-        // if (context.video){
-        //   // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "high"})
-        //   console.log("ADDING CREATE_CONNECTION TYPE HIGH")
-        //   self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "high"})
-        // } else if (context.microphone) {
-        //   console.log("ADDING CREATE_CONNECTION TYPE AUDIO")
-        //   self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "audio"})
-        //   // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "audio"})
-        // } else if (context.sharing) {
-        //   console.log("ADDING CREATE_CONNECTION TYPE SHARING")
-        //   self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "sharing"})
-        //   // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "sharing"})
-        // }
+        if (context.camera){
+          // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "high"})
+          console.log("ADDING CREATE_CONNECTION TYPE HIGH")
+          self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "high"})
+        } else if (context.microphone) {
+          console.log("ADDING CREATE_CONNECTION TYPE AUDIO")
+          self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "audio"})
+          // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "audio"})
+        } else if (context.sharing) {
+          console.log("ADDING CREATE_CONNECTION TYPE SHARING")
+          self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "sharing"})
+          // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "sharing"})
+        }
+        
       })),
       on: {
         CREATE_CONNECTION: {
-          actions: assign(({context, event, spawn}) => {
-            const { user, pairType } = event;
-            // Spawn a new webrtc connection actor
-            const date = Date.now().toString()
-            const hash = `webrtc-${user}-${pairType}-${date}`
-            const newWebrtc = {...context.webrtcs}
-            // if (pairType === "sharing"){
-            //   const webrtcActor = spawn(
-            //     createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash, "", [], context.screenSharing),
-            //     { name: hash }
-            //   );
-            // } else {
-            //   const webrtcActor = spawn(
-            //     createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash, "", [], context.stream),
-            //     { name: hash }
-            //   );
-            // }
-            const users = {...context.users}
-            users[hash] = {actor: webrtcActor, user: user, type: pairType, status: "loading"}
-            newWebrtc[hash] = webrtcActor
-            return {
-              ...context,
-              webrtcs: newWebrtcs,
-              users: users
-            };
-          })
+          actions: [
+            assign(({context, event, spawn}) => {
+              const { user, pairType } = event;
+              const date = Date.now().toString()
+              const hash = `webrtc-${user}-${pairType}-${date}`
+              const newWebrtc = {...context.webrtcs}
+              const media = (pairType === "sharing") ? context.screenSharing : context.stream
+              const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
+              const webrtcActor = spawn(
+                  createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash, "", [], media, opts),
+                  { name: hash }
+                );
+              const users = {...context.users}
+              users[hash] = {actor: webrtcActor, user: user, type: pairType, status: "loading"}
+              newWebrtc[hash] = webrtcActor
+              return {
+                ...context,
+                webrtcs: newWebrtc,
+                users: users
+              };
+            }),
+            enqueueActions(({ enqueue, event, spawn, context }) => {
+              console.log("------ about to send to parent ", event)
+              enqueue.sendParent(
+                { 
+                  type: 'child.ADD_MEDIA',
+                  message: {
+                    type: event.pairType,
+                  }
+                }
+              )
+            })
+          ]
         },
         // DISCONNECT_CONNECTION: {
         //   actions: (context, event) => {
@@ -124,13 +136,13 @@ export const webrtcManagerMachine = createMachine({
         // "child.NEGOTIATION_RESPONSE": {
         //   actions: enqueueActions(({ enqueue, event, context }) => {
         //     // console.log("EVENT IN PARENT POST CONNECT", event, context)
-        //     enqueue.sendParent({
-        //       type: 'child.NEGOTIATION_RESPONSE',
-        //       message: {
-        //         sdp: event.message.sdp,
-        //         ice: event.message.ice,
-        //         hash: event.message.hash
-        //       }
+            // enqueue.sendParent({
+            //   type: 'child.NEGOTIATION_RESPONSE',
+            //   message: {
+            //     sdp: event.message.sdp,
+            //     ice: event.message.ice,
+            //     hash: event.message.hash
+            //   }
         //     });
         //     }
         //   ),
@@ -149,6 +161,15 @@ export const webrtcManagerMachine = createMachine({
           stream: event?.stream || null,
           screenSharing: event?.screenSharing || null
         })
+        const allUsers = Object.values(context.users);
+        allUsers.forEach(userData => {
+          if (userData.type === 'data') {
+            const actor = userData.actor;
+            if (actor) {
+              enqueue.sendTo(actor, event);
+            }
+          }
+        });
       }))
     },
     ASSING_USER_NAME: {
@@ -192,8 +213,9 @@ export const webrtcManagerMachine = createMachine({
           const { user, sdp, ice, hash } = pair;
           const pairType = "data"
           const date = Date.now().toString()
+          const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
           let webrtcActor = spawn(
-            createWebRTCConnectionMachine(user, pairType, 'receiver', date, hash, sdp, ice),
+            createWebRTCConnectionMachine(user, pairType, 'receiver', date, hash, sdp, ice, false, opts),
             { name: hash }
           );
           users[hash] = {actor: webrtcActor, user: user, status: "loading", type: pairType}
@@ -252,8 +274,9 @@ export const webrtcManagerMachine = createMachine({
           const date = Date.now().toString()
           const name = `webrtc-${date}-data-${date}`
           let newWebrtcs = { ...context.webrtcs };
+          const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
           const webrtcActor = spawn(
-            createWebRTCConnectionMachine(date, 'data', 'instigator', date, name),{ name: name })
+            createWebRTCConnectionMachine(date, 'data', 'instigator', date, name, "", [], false, opts),{ name: name })
           newWebrtcs[name] = webrtcActor
           return {
             ...context,

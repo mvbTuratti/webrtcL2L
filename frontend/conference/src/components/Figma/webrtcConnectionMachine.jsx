@@ -43,8 +43,8 @@ const connectionMonitorLogic = fromCallback(({ sendBack, input }) => {
 });
 
 async function setAnswerAndCandidates({ peerConnection, sdp, ice }) {
-    console.log("HEY! STEP 3. ADDING THE RESPONSE", sdp)
-    console.log("HEY! STEP 3. ICES", ice)
+    console.log("HEY! STEP 3. ADDING THE RESPONSE")
+    console.log("HEY! STEP 3. ICES")
     if (!peerConnection || !sdp) {
         return Promise.reject(new Error("Missing peerConnection or SDP answer."));
     }
@@ -65,7 +65,7 @@ async function createOfferPromise(peerConnection) {
     const pc = peerConnection.input || peerConnection;
     let offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    console.log("HEY! STEP 1. CREATED THE OFFER", offer)
+    console.log("HEY! STEP 1. CREATED THE OFFER")
     return offer;
 }
 
@@ -77,7 +77,6 @@ async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandi
       )
     );
     results.forEach(result => {
-        console.log("MAPPING OF ICE IN CREATOR", result)
         if (result.status === 'rejected') {
             console.warn("Could not add an ICE candidate:", result.reason);
         }
@@ -88,13 +87,11 @@ async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandi
     }
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-    console.log("HEY! STEP 2. SET THE OFFER", offerSdp)
-    console.log("HEY! STEP 2. ICE CANDIDATES", iceCandidates)
-    console.log("HEY! STEP 2. RESPONSE", answer)
+    console.log("HEY! STEP 2. SET THE OFFER")
     return peerConnection.localDescription;
 }
 
-export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp, hash = "", offerSdp = "",ice = []) =>
+export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestamp, hash = "", offerSdp = "",ice = [], media = null, settings = {}) =>
   setup(  {
     actions: {
       createWebRTCObject: assign(({context, event, self}) => {
@@ -177,9 +174,13 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
       ice: ice,
       mode: mode,
       offerSdp: offerSdp,
+      media: media,
       rtt: [],
       qualityMetrics: null,
       qualityMonitorRef: undefined,
+      camera: settings?.camera || false,
+      microphone: settings?.microphone || false,
+      sharing: settings?.sharing || false,
       burstSamples: [],
       lastBurstReport: null, 
       configuration: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
@@ -465,6 +466,16 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
             target: '.disconnected'
         },
         ICE_CANDIDATE: { actions: 'pushPartialSDP' },
+        MEDIA_UPDATED: {
+            actions: enqueueActions((({ enqueue, event }) => {
+              console.log("Media update!!!@131@!!!", event)
+              enqueue.assign({
+                camera: event?.camera || false,
+                microphone: event?.microphone || false,
+                sharing: event?.sharing || false,
+              })
+            }))
+          },
         ICE_UPDATE_SERVER: {
             actions: [
                 assign({
