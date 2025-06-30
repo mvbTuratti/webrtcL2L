@@ -77,6 +77,7 @@ const Permission = ({ room } : Permission): JSX.Element => {
   const handleClickJoinRoom = () => {
     if (room && user) {
       setconferenceState(true)
+      socketActorRef.send({type: 'SET_ROOM_AND_USER', room: room, user: user})
     }
   };
   return (
