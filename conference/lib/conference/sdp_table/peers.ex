@@ -52,6 +52,10 @@ defmodule Conference.SdpTable.Peers do
     GenServer.call(pid, {:delete_user, pid_user})
   end
 
+  def get_sdp_entry(pid \\ __MODULE__, hash) do
+    GenServer.call(pid, {:get_sdp_value, hash})
+  end
+
   # Server callbacks
 
   @impl true
@@ -69,6 +73,20 @@ defmodule Conference.SdpTable.Peers do
         {:reply, %{found_hash => updated_with_self_pid}, new_state, @timeout}
       nil ->
         {:reply, nil, state, @timeout}
+    end
+  end
+  @impl true
+  def handle_call({:get_sdp_value, hash}, _from, state) do
+    case Map.get(state.active, hash) do
+      value ->
+        {:reply, %{hash: value}, state, @timeout}
+      nil ->
+        case Map.get(state.pending, hash) do
+          value ->
+            {:reply, %{hash: value}, state, @timeout}
+          nil ->
+            {:reply, nil, state, @timeout}
+        end
     end
   end
   @impl true
@@ -93,7 +111,7 @@ defmodule Conference.SdpTable.Peers do
         entry = state.pending[hash]
         updated_entry = Map.update!(entry, :ice, fn existing_ice ->
           normalized_new_ice = List.wrap(new_ice)
-          (normalized_new_ice ++ existing_ice) |> Enum.uniq()
+          normalized_new_ice ++ existing_ice
         end)
         new_pending = Map.put(state.pending, hash, updated_entry)
         # IO.inspect(new_pending, label: "New pending entry")

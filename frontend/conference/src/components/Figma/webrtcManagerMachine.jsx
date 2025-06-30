@@ -11,8 +11,13 @@ export const webrtcManagerMachine = createMachine({
     // hashes: {},
     placeholder: undefined,
     // ices: {},
-    initial_hash_received: false,
-    intiial_pairs_received: false,
+    user: false,
+    camera: false,
+    microphone: false,
+    stream: null,
+    sharing: false,
+    screenSharing: null,
+    users: {}
   },
   states: {
     start: {
@@ -25,31 +30,17 @@ export const webrtcManagerMachine = createMachine({
             const hash = `webrtc-${date}-data-${date}`
             const webrtcActor = spawn(
               createWebRTCConnectionMachine(date, 'data', 'instigator', date, hash),{ name: hash })
-              newWebrtcs[hash] = webrtcActor
+            newWebrtcs[hash] = webrtcActor
+            const users = {...context.users}
+            users[hash] = {actor: webrtcActor, user: "", status: "loading", type: "data"}
             return {
-              ...context,
-              webrtcs: newWebrtcs
+                ...context,
+                webrtcs: newWebrtcs,
+                users: users
               }
             }
           )
         },
-        // "child.PUSH_PARTIAL_ICE_CANDIDATE": {
-        //   actions: enqueueActions(({ enqueue, event, context }) => {
-        //       console.log("------- PUSH_PARTIAL_ICE_CANDIDATE 2 -----", event)
-        //       enqueue.assign({
-        //         ices: ({ context, event }) => {
-        //           const id = event.message.originId;
-        //           const candidate = event.message.latestCandidate;
-        //           const existingCandidates = context.ices?.[id] || [];
-        //           return {
-        //             ...context.ices,
-        //             [id]: [...existingCandidates, candidate],
-        //           };
-        //         },
-        //       })
-        //     }
-        //   ),
-        // },
         "child.SDP_VALUE": {
           actions: enqueueActions(({ enqueue, event }) => {
               console.log("EVENT IN PARENT", event)
@@ -63,47 +54,24 @@ export const webrtcManagerMachine = createMachine({
             }
           ),
         },
-        "child.NEGOTIATION_RESPONSE": {
-          actions: enqueueActions(({ enqueue, event, context }) => {
-            console.log("EVENT IN PARENT PRE CONNECT", event, context)
-            enqueue.sendParent({
-              type: 'child.NEGOTIATION_RESPONSE',
-              message: {
-                sdp: event.message.sdp,
-                ice: event.message.sdp,
-                hash: event.message.hash
-              }
-            });
-            }
-          ),
-        },
-        // JOIN_HASH: {
-        //   target: 'connected',
-        //   input: ({ event }) => ({
-        //     ...event
-        //   }),
-        // }
       },
     },
     connected: {
-      entry: enqueueActions((({ enqueue, event, context }) => {
-        // const ices = context.ices[event.data.origin];
-        // enqueue.sendParent(
-        //   { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
-        //     ice: ices,
-        //     hash: event.data.hash,
-        // }});
-        // enqueue.assign({
-        //   hashes: ({ context, event }) => {
-        //     const hash = event.data.hash;
-        //     const origin = event.data.origin;
-        //     return { ...context.hashes, [hash]: origin, [origin]: hash};
-        //   },
-        //   webrtcs: ({context, event}) => {
-        //     return {...context.webrtcs, [event.data.origin]: context.placeholder}
-        //   }
-        // })
+      entry: enqueueActions((({ enqueue, event, context, self }) => {
         console.log("connected manager machine", context)
+        // if (context.video){
+        //   // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "high"})
+        //   console.log("ADDING CREATE_CONNECTION TYPE HIGH")
+        //   self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "high"})
+        // } else if (context.microphone) {
+        //   console.log("ADDING CREATE_CONNECTION TYPE AUDIO")
+        //   self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "audio"})
+        //   // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "audio"})
+        // } else if (context.sharing) {
+        //   console.log("ADDING CREATE_CONNECTION TYPE SHARING")
+        //   self.send({type: "CREATE_CONNECTION", user: context.user, pairType: "sharing"})
+        //   // enqueue.sendTo(self, {type: "CREATE_CONNECTION", user: context.user, pairType: "sharing"})
+        // }
       })),
       on: {
         CREATE_CONNECTION: {
@@ -113,31 +81,26 @@ export const webrtcManagerMachine = createMachine({
             const date = Date.now().toString()
             const hash = `webrtc-${user}-${pairType}-${date}`
             const newWebrtc = {...context.webrtcs}
-            const webrtcActor = spawn(
-              createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash),
-              { name: hash }
-            );
+            // if (pairType === "sharing"){
+            //   const webrtcActor = spawn(
+            //     createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash, "", [], context.screenSharing),
+            //     { name: hash }
+            //   );
+            // } else {
+            //   const webrtcActor = spawn(
+            //     createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash, "", [], context.stream),
+            //     { name: hash }
+            //   );
+            // }
+            const users = {...context.users}
+            users[hash] = {actor: webrtcActor, user: user, type: pairType, status: "loading"}
             newWebrtc[hash] = webrtcActor
             return {
               ...context,
               webrtcs: newWebrtcs,
+              users: users
             };
           })
-        },
-        MAKE_PAIR: {
-          entry: () => console.log("HERE IN ENTRY OF MAKE PAIR!!!!!!!!\N"),
-          actions: enqueueActions((({ enqueue, event, context }) => {
-            const { hash, sdp, ice } = event.data;
-            // const machineName = context.hashes[hash]; // TODO: add some level of fallback?
-            // console.log("MACHINE NAME", context.hashes)
-            // console.log(context.webrtcs, hash, sdp, ice)
-            const actor = context.webrtcs[hash]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
-            if (actor) {
-              const payload = { sdp, ice };
-              // console.log(actor)
-              enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
-            }
-          }))
         },
         // DISCONNECT_CONNECTION: {
         //   actions: (context, event) => {
@@ -158,24 +121,61 @@ export const webrtcManagerMachine = createMachine({
         //     }
         //   }
         // },
-        "child.NEGOTIATION_RESPONSE": {
-          actions: enqueueActions(({ enqueue, event, context }) => {
-            // console.log("EVENT IN PARENT POST CONNECT", event, context)
-            enqueue.sendParent({
-              type: 'child.NEGOTIATION_RESPONSE',
-              message: {
-                sdp: event.message.sdp,
-                ice: event.message.ice,
-                hash: event.message.hash
-              }
-            });
-            }
-          ),
-        },
+        // "child.NEGOTIATION_RESPONSE": {
+        //   actions: enqueueActions(({ enqueue, event, context }) => {
+        //     // console.log("EVENT IN PARENT POST CONNECT", event, context)
+        //     enqueue.sendParent({
+        //       type: 'child.NEGOTIATION_RESPONSE',
+        //       message: {
+        //         sdp: event.message.sdp,
+        //         ice: event.message.ice,
+        //         hash: event.message.hash
+        //       }
+        //     });
+        //     }
+        //   ),
+        // },
       }
     }
   },
   on: {
+    MEDIA_UPDATED: {
+      actions: enqueueActions((({ enqueue, event, context }) => {
+        console.log("Media update", event)
+        enqueue.assign({
+          camera: event?.camera || false,
+          microphone: event?.microphone || false,
+          sharing: event?.sharing || false,
+          stream: event?.stream || null,
+          screenSharing: event?.screenSharing || null
+        })
+      }))
+    },
+    ASSING_USER_NAME: {
+      actions: assign(({event}) => {
+        console.log("assigning name: ", event)
+        return {user: event.user}
+      })
+    },
+    MAKE_PAIR: {
+      entry: () => console.log("HERE IN ENTRY OF MAKE PAIR!!!!!!!!\N"),
+      actions: enqueueActions((({ enqueue, event, context }) => {
+        const { hash, sdp, ice, user } = event.data;
+        // const machineName = context.hashes[hash]; // TODO: add some level of fallback?
+        // console.log("MACHINE NAME", context.hashes)
+        // console.log(context.webrtcs, hash, sdp, ice)
+        const actor = context.webrtcs[hash]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
+        if (actor) {
+          const payload = { sdp, ice, user };
+          enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
+          const users = {...context.users}
+          users[hash] = {actor: actor, user: user, status: "loading", type: "data"}
+          enqueue.assign({
+            users: users
+          })
+        }
+      }))
+    },
     CURRENT_USERS_SDP: {
       actions: assign(({event, context, spawn }) => {
         // console.log("--------++++----- CURRENT_USERS_SDP ENVET", event)
@@ -186,6 +186,7 @@ export const webrtcManagerMachine = createMachine({
         }
         let newWebrtcs = { ...context.webrtcs };
         // let hashes = {...context.hashes};
+        const users = {...context.users}
         event.data.forEach(pair => {
           // console.log("WHAT DO I HAVE HERE???", pair)
           const { user, sdp, ice, hash } = pair;
@@ -195,15 +196,37 @@ export const webrtcManagerMachine = createMachine({
             createWebRTCConnectionMachine(user, pairType, 'receiver', date, hash, sdp, ice),
             { name: hash }
           );
+          users[hash] = {actor: webrtcActor, user: user, status: "loading", type: pairType}
           newWebrtcs[hash] = webrtcActor
-          // TODO: add callback to parent
-          // console.log("WEBRTC SPAWNED CHILD", newWebrtcs, hashes)
         });
         return {
           ...context,
           webrtcs: newWebrtcs,
-          // hashes: hashes
+          users: users
         };
+      })
+    },
+    USER_LEFT: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        const { hashes } = event.data;
+        hashes.forEach(hash => {
+          const actor = context.webrtcs[hash];
+          if (actor) {
+            enqueue.sendTo(actor, { type: 'DISCONNECT' });
+          }
+        });
+        enqueue.assign({
+          webrtcs: (context) => {
+            const newWebrtcs = { ...context.webrtcs };
+            hashes.forEach(hash => delete newWebrtcs[hash]);
+            return newWebrtcs;
+          },
+          users: (context) => {
+            const users = { ...context.users};
+            hashes.forEach(hash => delete users[hash]);
+            return users;
+          }
+        });
       })
     },
     ICE_UPDATE_SERVER: {
@@ -255,7 +278,6 @@ export const webrtcManagerMachine = createMachine({
     "child.PUSH_PARTIAL_ICE_CANDIDATE": {
       actions: enqueueActions(({ enqueue, event, context }) => {
         // console.log("------------- HERE?", event)
-        // const hash = context.ices?.[event.message.hash]
         if (event.message.hash) {
             enqueue.sendParent(
               { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
@@ -263,6 +285,40 @@ export const webrtcManagerMachine = createMachine({
                 hash: event.message.hash,
             }});
           }
+        }
+      ),
+    },
+    "child.NEGOTIATION_RESPONSE": {
+      actions: enqueueActions(({ enqueue, event, context }) => {
+        // console.log("EVENT IN PARENT POST CONNECT", event, context)
+        enqueue.sendParent({
+          type: 'child.NEGOTIATION_RESPONSE',
+          message: {
+            sdp: event.message.sdp,
+            ice: event.message.ice,
+            hash: event.message.hash
+          }
+        });
+        }
+      ),
+    },
+    "child.SET_AS_DONE": {
+      actions: assign(({event, context}) => {
+        const users = {...context.users}
+        users[hash].status = "done"
+        return {
+          ...context,
+          users: users
+        }
+      })
+    },
+    "child.UPSERT_CONNECTION_VALUE": {
+      actions: enqueueActions(({ enqueue, event, context }) => {
+        console.log("------ child.UPSERT_CONNECTION_VALUE --------", event)
+        enqueue.sendParent({
+          type: 'child.UPSERT_CONNECTION_VALUE',
+          ...event
+        });
         }
       ),
     },

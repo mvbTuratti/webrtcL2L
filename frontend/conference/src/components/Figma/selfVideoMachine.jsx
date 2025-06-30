@@ -1,4 +1,4 @@
-import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sendParent, enqueueActions, createMachine } from 'xstate';
+import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sendParent, enqueueActions, createMachine, emit } from 'xstate';
 
 
 const getUserPermission = async ({camera, microphone, micId, videoId, width = 1200, height = 800}) => {
@@ -75,6 +75,12 @@ const deviceOptions = setup({
 export const fetchVideoMachine = setup(
   {
     actions: {
+      emitMediaUpdate: emit(({ context }) => ({
+        type: 'MEDIA_UPDATED',
+        stream: context.mediaStream,
+        camera: context.camera,
+        microphone: context.microphone,
+      })),
     },
     actors: {
       askForDeviceOptions: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)),
@@ -94,7 +100,7 @@ export const fetchVideoMachine = setup(
     permissionRemovedMic: false,
     permissionRemovedCamera: false,
     joining: true,
-  },
+  }, 
   entry: spawnChild(deviceOptions, {id: 'devices'}),
   states: {
     start: {
@@ -103,11 +109,12 @@ export const fetchVideoMachine = setup(
         input: (({ context }) => context),
         onDone: {
           actions: [
-          assign({
-            camera: ({context}) => context.joining ? true : context.camera,
-            microphone: ({context}) => context.joining ? true : context.microphone,
-            mediaStream: ( { event } ) => event.output,
-          })
+            assign({
+              camera: ({context}) => context.joining ? true : context.camera,
+              microphone: ({context}) => context.joining ? true : context.microphone,
+              mediaStream: ( { event } ) => event.output,
+            }),
+            { type: 'emitMediaUpdate' }
         ],
           target: 'idle',
         },
@@ -128,41 +135,58 @@ export const fetchVideoMachine = setup(
       entry: [assign({joining: () => false})],
       on: {
         "painel.fetch": {
-          actions: enqueueActions((({ enqueue, event }) => {
+          actions: [enqueueActions((({ enqueue, event }) => {
             enqueue.sendTo('devices' , { type: "options.fetch", mediaType: event.mediaType })
-          }))
+          })),
+          { type: 'emitMediaUpdate' }
+        ]
         },
         "painel.removedMic": {
-          actions: assign({
-            microphone: ({ event }) => false,
-            permissionRemovedMic: ({ event }) => 'permission' in event
-          }),
+          actions: [ 
+            assign({
+              microphone: ({ event }) => false,
+              permissionRemovedMic: ({ event }) => 'permission' in event
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
         "painel.removedCamera": {
-          actions: assign({
-            camera: ({ event }) => false,
-            permissionRemovedCamera: ({ event }) => 'permission' in event
-          }),
+          actions: [ 
+            assign({
+              camera: ({ event }) => false,
+              permissionRemovedCamera: ({ event }) => 'permission' in event
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
         "painel.changeMedia": {
-          actions: assign({
-            micId: ({ event, context }) => event.device === 'audio' ? event.mediaId : context.micId,
-            cameraId: ({event, context}) => event.device === 'video' ? event.mediaId : context.cameraId
-          }),
+          actions: [
+            assign({
+              micId: ({ event, context }) => event.device === 'audio' ? event.mediaId : context.micId,
+              cameraId: ({event, context}) => event.device === 'video' ? event.mediaId : context.cameraId
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
         "painel.addCamera": {
-          actions: assign({
-            camera: ({ event }) => true,
-          }),
+          actions: [
+            assign({
+              camera: ({ event }) => true,
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
         "painel.addMic": {
-          actions: assign({
-            microphone: ({ event }) => true,
-          }),
+          actions: [
+            assign({
+              microphone: ({ event }) => true,
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
       },
@@ -174,19 +198,26 @@ export const fetchVideoMachine = setup(
           microphone: () => false,
           camera: () => false,
           joining: () => false
-        }), 
+        }),
+        { type: 'emitMediaUpdate' } 
         ],
       on: {
         "painel.addCamera": {
-          actions: assign({
-            camera: ({ context }) => !context.permissionRemovedCamera,
-          }),
+          actions: [
+            assign({
+              camera: ({ context }) => !context.permissionRemovedCamera,
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
         "painel.addMic": {
-          actions: assign({
-            microphone: ({ context }) => !context.permissionRemovedMic,
-          }),
+          actions: [
+            assign({
+              microphone: ({ context }) => !context.permissionRemovedMic,
+            }),
+            { type: 'emitMediaUpdate' }
+          ],
           target: 'start'
         },
       }

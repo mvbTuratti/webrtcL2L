@@ -12,7 +12,7 @@ defmodule Conference.RoutingState.Routing do
   # Initialize the server state connections, connection quality is a graph representing custom data metrics, others forests
   @impl true
   def init(_init_args) do
-    {:ok, %{high_quality: %{}, low_quality: %{}, audio_only: %{}, connection_quality: Graph.new()}, @timeout}
+    {:ok, %{high_quality: %{}, low_quality: %{}, audio_only: %{}, sharing: %{}, connection_quality: Graph.new()}, @timeout}
   end
 
   @impl true
@@ -67,7 +67,7 @@ defmodule Conference.RoutingState.Routing do
   @impl true
   def handle_call({:remove_user, user_to_remove}, _from, state) do
     {state_after_viewer_removal, all_recommendations} =
-      Enum.reduce([:high_quality, :low_quality, :audio_only], {state, %{high_quality: [], low_quality: [], audio_only: []}},
+      Enum.reduce([:high_quality, :low_quality, :audio_only, :sharing], {state, %{high_quality: [], low_quality: [], audio_only: [], sharing: []}},
       fn stream_type, {current_state_acc, all_recs_acc} ->
         streams_of_type = Map.get(current_state_acc, stream_type)
         {updated_streams_as_kv_list, new_recommendations_for_type} =
@@ -95,7 +95,7 @@ defmodule Conference.RoutingState.Routing do
         {state_with_updated_streams, Map.put(all_recs_acc, stream_type, new_recommendations_for_type)}
       end)
     state_after_streamer_removal =
-      Enum.reduce([:high_quality, :low_quality, :audio_only], state_after_viewer_removal, fn stream_type, acc_state ->
+      Enum.reduce([:high_quality, :low_quality, :audio_only, :sharing], state_after_viewer_removal, fn stream_type, acc_state ->
         Map.update!(acc_state, stream_type, &Map.delete(&1, user_to_remove))
       end)
     new_connection_quality = Graph.delete_vertex(state_after_streamer_removal.connection_quality, user_to_remove)
@@ -124,18 +124,19 @@ defmodule Conference.RoutingState.Routing do
   def handle_info(:timeout, state) do
     {:stop, :normal, state}
   end
-  @spec create_stream(pid(), :high_quality | :low_quality | :audio_only, String.t()) :: pid()
+  @spec create_stream(pid(), :high_quality | :low_quality | :audio_only | :sharing, String.t()) :: pid()
   def create_stream(pid, :high_quality = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})
   def create_stream(pid, :low_quality = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})
   def create_stream(pid, :audio_only = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})
+  def create_stream(pid, :sharing = type, streamer), do: GenServer.call(pid, {:create_stream, type, streamer})
 
-  @spec join_stream(pid(), :high_quality | :low_quality | :audio_only, String.t(), String.t()) :: {:ok, String.t()} | {:missing_streamer, []}
+  @spec join_stream(pid(), :high_quality | :low_quality | :audio_only | :sharing, String.t(), String.t()) :: {:ok, String.t()} | {:missing_streamer, []}
   def join_stream(pid, quality, streamer, viewer), do: GenServer.call(pid, {:add_viewer, quality, streamer, viewer})
 
   @spec upsert_connection_quality(pid(), [%{source: String.t(), target: String.t(), weight: pos_integer()|pos_integer()}]) :: pid()
   def upsert_connection_quality(pid, new_weights), do: GenServer.call(pid, {:update_connection_quality, new_weights})
 
-  @spec leave_stream(pid(), :high_quality|:low_quality|:audio_only, String.t(), String.t()) :: {:ok, [{:ok, String.t(), String.t()}|{:missing_parent, String.t(), String.t()}]}
+  @spec leave_stream(pid(), :high_quality|:low_quality|:audio_only|:sharing, String.t(), String.t()) :: {:ok, [{:ok, String.t(), String.t()}|{:missing_parent, String.t(), String.t()}]}
   def leave_stream(pid, quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, quality, streamer, viewer})
   # def leave_stream(pid, :low_quality, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :low_quality, streamer, viewer})
   # def leave_stream(pid, :audio_only, streamer, viewer), do: GenServer.call(pid, {:leave_stream, :audio_only, streamer, viewer})

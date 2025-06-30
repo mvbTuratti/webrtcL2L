@@ -2,47 +2,62 @@ import { createMachine, assign, setup, sendParent, enqueueActions, fromPromise, 
 
 const connectionMonitorLogic = fromCallback(({ sendBack, input }) => {
     const { peerConnection } = input;
-    console.log('✅ Unified Connection Monitor has STARTED!');
+    console.log('Unified Connection Monitor has STARTED!');
+    let burstIntervalId = null;
+    let cooldownTimeoutId = null;
   
-    const monitorAndPing = () => {
+    const pollStats = () => {
       if (!peerConnection || peerConnection.connectionState !== 'connected') return;
       peerConnection.getStats().then(stats => {
         let metrics = { availableBitrate: null };
-        // console.log("Got stats", stats)
         for (const report of stats.values()) {
           if (report.type === 'candidate-pair' && report.nominated === true) {
             metrics.availableBitrate = report.availableOutgoingBitrate;
             break;
           }
         }
-        // Send the stats back to the machine
         sendBack({ type: 'STATS_UPDATED', data: metrics });
-      }).catch(error => {
-        console.error("Error polling getStats:", error);
-      });
+      }).catch(error => console.error("Error polling getStats:", error));
       sendBack({ type: 'TRIGGER_PING' });
     };
-    const intervalId = setInterval(monitorAndPing, 3000);
+  
+    const startCooldown = () => {
+      console.log('Monitor entering 57-second cooldown...');
+      clearInterval(burstIntervalId);
+      sendBack({type: 'SEND_PERFORMANCE'})
+      cooldownTimeoutId = setTimeout(startBurst, 57000);
+    };
+  
+    const startBurst = () => {
+      console.log('Monitor starting 3-second polling burst...');
+      
+      burstIntervalId = setInterval(pollStats, 500);
+      cooldownTimeoutId = setTimeout(startCooldown, 3000);
+    };
+  
+    startBurst();
     return () => {
-      console.log('🛑 Unified Connection Monitor has STOPPED.');
+      console.log('Unified Connection Monitor has STOPPED.');
       clearInterval(intervalId);
     };
 });
 
 async function setAnswerAndCandidates({ peerConnection, sdp, ice }) {
+    console.log("HEY! STEP 3. ADDING THE RESPONSE", sdp)
+    console.log("HEY! STEP 3. ICES", ice)
     if (!peerConnection || !sdp) {
-      return Promise.reject(new Error("Missing peerConnection or SDP answer."));
+        return Promise.reject(new Error("Missing peerConnection or SDP answer."));
     }
     await peerConnection.setRemoteDescription(sdp);
     if (ice && Array.isArray(ice)) {
-      const results = await Promise.allSettled(
-        ice.map(candidate => candidate ? peerConnection.addIceCandidate(candidate) : null)
-      );
-      results.forEach(result => {
-        if (result.status === 'rejected') {
-          console.warn("Could not add an ICE candidate:", result.reason);
-        }
-      });
+        const results = await Promise.allSettled(
+            ice.map(candidate => candidate ? peerConnection.addIceCandidate(candidate) : null)
+        );
+        results.forEach(result => {
+            if (result.status === 'rejected') {
+            console.warn("Could not add an ICE candidate:", result.reason);
+            }
+        });
     }
 }
 
@@ -50,6 +65,7 @@ async function createOfferPromise(peerConnection) {
     const pc = peerConnection.input || peerConnection;
     let offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    console.log("HEY! STEP 1. CREATED THE OFFER", offer)
     return offer;
 }
 
@@ -61,16 +77,20 @@ async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandi
       )
     );
     results.forEach(result => {
-      if (result.status === 'rejected') {
-        console.warn("Could not add an ICE candidate:", result.reason);
-      }
+        console.log("MAPPING OF ICE IN CREATOR", result)
+        if (result.status === 'rejected') {
+            console.warn("Could not add an ICE candidate:", result.reason);
+        }
     });
     const allFailed = results.every(r => r.status === 'rejected');
     if (allFailed && iceCandidates.length > 0) {
-      return Promise.reject(new Error("All provided ICE candidates were invalid."));
+        return Promise.reject(new Error("All provided ICE candidates were invalid."));
     }
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
+    console.log("HEY! STEP 2. SET THE OFFER", offerSdp)
+    console.log("HEY! STEP 2. ICE CANDIDATES", iceCandidates)
+    console.log("HEY! STEP 2. RESPONSE", answer)
     return peerConnection.localDescription;
 }
 
@@ -91,6 +111,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
             channel.onclose = () => console.log('Data channel closed!');
           };
         let dataChannel;
+        console.log(context.mode, context.pairType, "HEEEEYEYYYY -!!! CHECK THIS:")
         if (context.mode === 'instigator' && context.pairType === 'data') {
             dataChannel = peerConnection.createDataChannel('chat');
             setupDataChannelListeners(dataChannel);
@@ -104,12 +125,6 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
         }
         return { ...context, peerConnection, dataChannel };
       }),
-      handleUpdate: ({context, event}) => {
-        console.log(`Updating connection for ${context.pairName} (${context.pairType})`, event.data);
-      },
-      cleanup: ({context, event}) => {
-        console.log(`Cleaning up connection for ${context.pairName} (${context.pairType})`);
-      },
       pushPartialSDP: enqueueActions(({ context, enqueue, event }) => {
             // console.log("--------------- PUSH PARTIAL SDP EVENT", event, context)
             enqueue.sendParent(
@@ -122,6 +137,22 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
             enqueue.assign({ice: ({context}) => { return [...context.ice, event.candidate]}})
           }
       ),
+      cleanupConnection: ({ context }) => {
+        const { peerConnection, dataChannel } = context;
+        if (peerConnection) {
+          console.log(`Cleaning up connection for ${context.name}`);
+          peerConnection.onicecandidate = null;
+          peerConnection.ondatachannel = null;
+          peerConnection.onconnectionstatechange = null;
+          if (dataChannel) {
+            dataChannel.onmessage = null;
+            dataChannel.onopen = null;
+            dataChannel.onclose = null;
+            dataChannel.close();
+          }
+          peerConnection.close();
+        }
+      },
     },
     actors: {
         createOffer: fromPromise(( peerConnection ) => createOfferPromise(peerConnection)),
@@ -146,9 +177,11 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
       ice: ice,
       mode: mode,
       offerSdp: offerSdp,
-      rtt: null,
+      rtt: [],
       qualityMetrics: null,
       qualityMonitorRef: undefined,
+      burstSamples: [],
+      lastBurstReport: null, 
       configuration: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
     },
     states: {
@@ -204,7 +237,6 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
               waitingForAnswer: {
                 entry: () => console.log('Instigator: Waiting for answer from peer...'),
                 on: {
-                  ICE_CANDIDATE: { actions: 'pushPartialSDP' },
                   MAKE_PAIR: { target: 'settingAnswer' }
                 }
               },
@@ -215,7 +247,8 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                   input: ({ context, event }) => ({
                     peerConnection: context.peerConnection,
                     sdp: event.data.sdp,
-                    ice: event.data.ice
+                    ice: event.data.ice,
+                    user: event.data.user
                   }),
                   onDone: {
                     target: '#connected'
@@ -237,7 +270,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
           },
         negotiatingReceiver: {
             initial: 'creatingAnswer',
-            entry: () => console.log("Entering receiver negotiation flow..."),
+            entry: ({context}) => console.log("Entering receiver negotiation flow...", context.ice),
             states: {
               creatingAnswer: {
                 invoke: {
@@ -267,11 +300,6 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                           self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, hash: context.name });
                         }
                       };
-                    //   context.peerConnection.onicegatheringstatechange = (e) => {
-                    //     if (context.peerConnection.iceGatheringState === 'complete') {
-                    //       self.send({ type: 'ICE_GATHERING_COMPLETE' });
-                    //     }
-                    //   };
                       context.peerConnection.addEventListener('connectionstatechange', () => {
                         if (context.peerConnection.connectionState === 'connected') {
                           self.send({ type: 'CONNECTED' });
@@ -287,9 +315,9 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
               },
               gatheringCandidates: {
                 on: {
-                    ICE_CANDIDATE: {
-                        actions: 'pushPartialSDP'
-                    },
+                    // ICE_CANDIDATE: {
+                    //     actions: 'pushPartialSDP'
+                    // },
                     CONNECTED: {
                         target: '#connected',
                         entry: console.log("moving to CONNECTED")
@@ -298,28 +326,17 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
               },
               error: {
                 type: 'final',
-                entry: ({context}) => {
-                    console.log("error....")
-                    if (context.peerConnection) {
-                        context.peerConnection.close();
-                    }
-                }
+                entry: 'cleanupConnection'
+                
               }
             },
             onDone: 'connected'
         },
         disconnected: {
             type: 'final',
-            entry: enqueueActions(({ context, enqueue }) => {
-                console.log(`Cleaning up connection for ${context.pairName} (${context.pairType})`);
-                if (context.peerConnection) {
-                  context.peerConnection.close();
-                }
-                enqueue.sendParent({
-                  type: 'child.DISCONNECTED',
-                  hash: context.name
-                });
-              })
+            entry: [
+                'cleanupConnection',
+            ]
         },
         connected: {
             id: 'connected',
@@ -336,7 +353,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 initial: 'opening',
                 states: {
                   opening: {
-                    entry: () => console.log('Data channel is opening...'),
+                    entry: () => console.log('Data channel is opening..'),
                     on: {
                       DATA_CHANNEL_READY: {
                         target: 'ready'
@@ -344,16 +361,13 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                     }
                   },
                   ready: {
-                    entry: enqueueActions(({ context, enqueue, self })  => {
-                        console.log('Connection is data-enabled. ');
-                        self.send({ type: 'TRIGGER_PING' });
-                        enqueue.assign({
-                            qualityMonitorRef: ({ spawn, context }) => {
-                              return spawn('connectionMonitorLogic', {
-                                input: { peerConnection: context.peerConnection }
-                              });
-                            }
-                        })
+                    entry: assign({
+                      qualityMonitorRef: ({ spawn, context }) => {
+                        console.log('Data channel ready. Spawning monitor...');
+                        return spawn('connectionMonitorLogic', {
+                          input: { peerConnection: context.peerConnection }
+                        });
+                      }
                     }),
                     exit: stopChild(({ context }) => context.qualityMonitorRef),
                     on: {
@@ -404,10 +418,10 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                             actions: [
                               ({ event }) => {
                                 const rtt = performance.now() - event.sentTime;
-                                // console.log(`%c[RTT Check] RTT: ${rtt.toFixed(2)}ms`, 'color: green');
+                                console.log(`%c[RTT Check] RTT: ${rtt.toFixed(2)}ms`, 'color: green');
                               },
                               assign({
-                                rtt: ({ event }) => performance.now() - event.sentTime
+                                rtt: ({ event, context }) => [...context.rtt,performance.now() - event.sentTime]
                               })
                             ]
                         },
@@ -427,47 +441,30 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 target: '.withDataChannel'
               },
               STATS_UPDATED: {
-                actions: [
-                  ({ event, context }) => {
-                    const { availableBitrate } = event.data;
-                    if (availableBitrate !== null) {
-                      const bitrateMbps = (availableBitrate / 1_000_000).toFixed(2);
-                    //   console.log(`%c[Stats Check] Available Bandwidth: ${bitrateMbps} Mbps - ${context.name}`, 'color: blue');
-                    }
-                  },
-                  assign({ qualityMetrics: ({ context, event }) => ({...context.qualityMetrics, ...event.data}) })
-                ]
-              },
-              QUALITY_UPDATED: {
-                actions: [
-                  ({ event, context }) => {
-                    const { roundTripTime, availableBitrate } = event.data;
+                actions: enqueueActions(({ context, enqueue, event }) => {
+                    console.log("--------------- STATS _ UPDATE CALL", event)
                     
-                    if (roundTripTime !== null && availableBitrate !== null) {
-                      // Convert bitrate to Megabits per second (Mbps) for easier reading
-                      const bitrateMbps = (availableBitrate / 1_000_000).toFixed(2);
-                    //   console.log(
-                    //     `%c[Quality Check] RTT: ${roundTripTime.toFixed(0)}ms, Available Bandwidth: ${bitrateMbps} Mbps ${context.name}`, 
-                    //     'color: blue'
-                    //   );
-                    } else {
-                    //   console.log(`%c[Quality Check] Waiting for active network path to be nominated...`, 'color: orange');
-                    }
-                  },
-                  // Also, save the metrics to the context for later use
-                  assign({
-                    qualityMetrics: ({ event }) => event.data
-                  })
-                ]
+                })
               },
-              UPDATE: {
-                actions: 'handleUpdate'
+              SEND_PERFORMANCE: {
+                actions: enqueueActions(({ context, enqueue }) => {
+                    console.log("here in send performance", context.rtt)
+                    const sum = context.rtt.reduce((total, current) => total + current, 0);
+                    const mean = sum / context.rtt.length;
+                    const meanCeiling = Math.ceil(mean);
+                    enqueue.sendParent({type: 'child.UPSERT_CONNECTION_VALUE', value: meanCeiling, hash: context.name})
+                    enqueue.assign({rtt: []})
+                  }),
               },
               DISCONNECT: 'disconnected'
             }
         }
     },
     on: {
+        DISCONNECT: {
+            target: '.disconnected'
+        },
+        ICE_CANDIDATE: { actions: 'pushPartialSDP' },
         ICE_UPDATE_SERVER: {
             actions: [
                 assign({
@@ -477,14 +474,15 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                     }
                 }),
                 ({ context, event }) => {
-                    console.log("Received ice update from server")
+                    console.log("Received ice update from server", context, event)
                     if (context.peerConnection && context.peerConnection.remoteDescription) {
                         console.log("Connection is ready, adding trickle ICE candidate immediately.");
                         const newCandidates = Array.isArray(event.ice) ? event.ice : [event.ice];
                         newCandidates.forEach(candidate => {
                             if (candidate) {
-                            context.peerConnection.addIceCandidate(candidate)
-                                .catch(e => console.error("Error adding live trickle ICE candidate:", e));
+                                console.log(candidate, "CANDIDATE ADDED")
+                                context.peerConnection.addIceCandidate(candidate)
+                                    .catch(e => console.error("Error adding live trickle ICE candidate:", e));
                             }
                         });
                     } else {

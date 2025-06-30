@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+// import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { ProgressIndicators } from '../Joining/ProgressIndicator'; 
 import { SocketContext } from '../FigmaTest'; 
 
@@ -10,7 +10,8 @@ interface Permission {
 
 const LoadingScreen = ({room, userName}:Permission) => {
 
-    const socketActorRef = SocketContext.useActorRef();  
+    const socketActorRef = SocketContext.useActorRef();
+    // const videoActorRef = VideoCameraContext.useActorRef();
     console.log(userName)
     
     socketActorRef.send({type: 'SET_ROOM_AND_USER', room: room, user: userName})

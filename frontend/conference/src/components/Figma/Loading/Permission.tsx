@@ -1,11 +1,11 @@
 import ActiveVideoTile from './ActiveVideoTile';
 import MemberCounting from './MemberCounting'
 import VideoControls from './VideoControls'
-import { VideoCameraContext } from '../FigmaTest'
+import { VideoCameraContext, SocketContext } from '../FigmaTest'
 import { Input } from "@nextui-org/react";
 import ButtonJoinMeeting from './ButtonJoinMeeting';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import LoadingScreen from './LoadingScreen'
 
 function watchPermissionRemoval(type: string, videoRef: any) {
@@ -39,6 +39,7 @@ const Permission = ({ room } : Permission): JSX.Element => {
 
   const state = VideoCameraContext.useSelector((state) => state);
   const videoActorRef = VideoCameraContext.useActorRef();
+  const socketActorRef = SocketContext.useActorRef();
   
   useEffect(() => {
       const elements: string[] = ["camera", "microphone"];
@@ -47,6 +48,9 @@ const Permission = ({ room } : Permission): JSX.Element => {
             watchPermissionRemoval(d, videoActorRef);
         });
       }
+      const subscription = videoActorRef.on('MEDIA_UPDATED', (emittedEvent) => {
+        socketActorRef.send(emittedEvent)
+      })
       return () => {
         if ('permissions' in navigator ) {
           elements.forEach((d: string) => {
@@ -58,8 +62,9 @@ const Permission = ({ room } : Permission): JSX.Element => {
                   });
           });
         }
+        subscription.unsubscribe();
       };
-  }, []);
+  }, [videoActorRef, socketActorRef]);
   
   const handleInputName = (name : string) => {
     if (name.trim().length > 2) {
