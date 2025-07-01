@@ -94,7 +94,7 @@ export const webrtcManagerMachine = createMachine({
               let users = {...context.users}
               users[hash] = {actor: webrtcActor, user: user, type: pairType, status: "loading"}
               newWebrtc[hash] = webrtcActor
-              console.warn(users)
+              // console.warn(users)
               return {
                 ...context,
                 webrtcs: newWebrtc,
@@ -199,7 +199,7 @@ export const webrtcManagerMachine = createMachine({
             enqueue.assign({
               users: users
             })
-            console.warn(users)
+            // console.warn(users)
             enqueue.sendParent({
               type: "child.EMIT_USERS",
               users: users
@@ -232,7 +232,7 @@ export const webrtcManagerMachine = createMachine({
               );
               users[hash] = {actor: webrtcActor, user: user, status: "loading", type: pairType}
               newWebrtcs[hash] = webrtcActor
-              console.warn(users)
+              // console.warn(users)
             });
             return {
               ...context,
@@ -318,7 +318,7 @@ export const webrtcManagerMachine = createMachine({
           newWebrtcs[name] = webrtcActor
           let users = {...context.users}
           users[name] = {actor: webrtcActor, user: context.user, type: "data", status: "loading"}
-          console.warn(users)
+          // console.warn(users)
           return {
             ...context,
             webrtcs: newWebrtcs,
@@ -337,6 +337,19 @@ export const webrtcManagerMachine = createMachine({
               hash: event.message.hash
           }}
           );
+        }
+      ),
+    },
+    "child.PEER_MEDIA_UPDATED": {
+      actions: enqueueActions(({ enqueue, event }) => {
+          console.log("EVENT IN PARENT", event)
+          // enqueue.sendParent(
+          //   { type: 'child.SDP_VALUE', message: {
+          //     sdp: event.message.sdp,
+          //     format: event.message.format,
+          //     hash: event.message.hash
+          // }}
+          // );
         }
       ),
     },

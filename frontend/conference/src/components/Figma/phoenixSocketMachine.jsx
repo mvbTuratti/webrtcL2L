@@ -273,10 +273,10 @@ const websocketMachine = setup(
     },
     "child.EMIT_USERS": {
       actions: [
-        ({event}) => {
-          console.warn(`HERE IN EMIT USERS:`)
-          console.log(event)
-        },
+        // ({event}) => {
+        //   console.warn(`HERE IN EMIT USERS:`)
+        //   console.log(event)
+        // },
         assign(({event, context }) => {
           return {...context, users: event.users}
         }),

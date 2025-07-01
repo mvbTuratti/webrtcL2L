@@ -182,6 +182,11 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
       camera: settings?.camera || false,
       microphone: settings?.microphone || false,
       sharing: settings?.sharing || false,
+      peerSettings: {
+        camera: false,
+        microphone: false,
+        sharing: false,
+      },
       burstSamples: [],
       lastBurstReport: null, 
       configuration: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
@@ -363,14 +368,25 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                     }
                   },
                   ready: {
-                    entry: assign({
-                      qualityMonitorRef: ({ spawn, context }) => {
-                        console.log('Data channel ready. Spawning monitor...');
-                        return spawn('connectionMonitorLogic', {
-                          input: { peerConnection: context.peerConnection }
-                        });
-                      }
-                    }),
+                    entry: [
+                        assign({
+                            qualityMonitorRef: ({ spawn, context }) => {
+                                return spawn('connectionMonitorLogic', {
+                                    input: { peerConnection: context.peerConnection }
+                                });
+                            }
+                        }),
+                        enqueueActions(({ context, enqueue, self }) => {
+                            self.send({ type: 'SEND_MESSAGE', data: {
+                                type: 'sync-settings',
+                                message: {
+                                    camera: context.camera,
+                                    microphone: context.microphone,
+                                    sharing: context.sharing
+                                }
+                            } });
+                        }),
+                    ],
                     exit: stopChild(({ context }) => context.qualityMonitorRef),
                     on: {
                         TRIGGER_PING: {
@@ -396,7 +412,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         DATA_RECEIVED: {
                             actions: ({ self, context, event }) => {
                                 try {
-                                    // console.log("------- AAAAAAAA -----", event)
+                                    console.log("------- AAAAAAAA -----", event)
                                     const message = JSON.parse(event.data);
                                     switch (message.type) {
                                         case 'ping':
@@ -406,6 +422,9 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                                             break;
                                         case 'pong':
                                             self.send({ type: 'PONG_RECEIVED', sentTime: message.originalSentTime });
+                                            break;
+                                        case 'sync-settings':
+                                            self.send({ type: 'PEER_SETTINGS_RECEIVED', settings: message.data });
                                             break;
                                         default:
                                             console.log('Received unhandled message type:', message.type);
@@ -427,6 +446,18 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                               })
                             ]
                         },
+                        PEER_SETTINGS_RECEIVED: {
+                            actions: [
+                              assign({
+                                peerSettings: ({ event }) => event.settings
+                              }),
+                              sendParent(({ context, event }) => ({
+                                type: 'child.PEER_MEDIA_UPDATED',
+                                hash: context.name,
+                                settings: event.settings
+                              }))
+                            ]
+                          },
                     }
                   },
                 }
@@ -468,14 +499,29 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
         },
         ICE_CANDIDATE: { actions: 'pushPartialSDP' },
         MEDIA_UPDATED: {
-            actions: enqueueActions((({ enqueue, event }) => {
-              console.log("Media update!!!@131@!!!", event)
-              enqueue.assign({
-                camera: event?.camera || false,
-                microphone: event?.microphone || false,
-                sharing: event?.sharing || false,
-              })
-            }))
+            actions: [
+                enqueueActions((({ enqueue, event }) => {
+                    console.log("Media update!!!@131@!!!", event)
+                    enqueue.assign({
+                        camera: event?.camera || false,
+                        microphone: event?.microphone || false,
+                        sharing: event?.sharing || false,
+                    })
+                })),
+                ({ context, event }) => {
+                    if (context.dataChannel?.readyState === 'open') {
+                        console.log("Relaying media settings update to peer...");
+                        context.dataChannel.send(JSON.stringify({
+                        type: 'sync-settings',
+                        settings: {
+                            camera: event?.camera || false,
+                            microphone: event?.microphone || false,
+                            sharing: event?.sharing || false,
+                        }
+                        }));
+                    }
+                }
+            ]
           },
         ICE_UPDATE_SERVER: {
             actions: [

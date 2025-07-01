@@ -23,11 +23,10 @@ const LoadingScreen = ({room, userName}:Permission) => {
     // const videoActorRef = VideoCameraContext.useActorRef();
     useEffect(() => {
       const check = socketActorRef.on('CHECK_STATUS', (emittedEvent :any) => {
-        console.log("EMITTED EVENT!")
         setDone(emittedEvent?.done || false)
       })
       const subscription = socketActorRef.on("USERS_AVAILABLE", (emittedEvent : any) => {
-        console.warn("Received USERS_AVAILABLE:", emittedEvent);
+        // console.warn("Received USERS_AVAILABLE:", emittedEvent);
         const usersEmitted = emittedEvent.users;
         const rawUsers = Object.values(usersEmitted);
         const usersMap = rawUsers.reduce((acc:any, currentUser:any) => {
