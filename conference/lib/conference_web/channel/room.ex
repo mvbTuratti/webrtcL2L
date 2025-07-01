@@ -185,6 +185,32 @@ defmodule ConferenceWeb.Channel.Room do
     send(new_transport_pid, {:transport_updated, ref})
     {:noreply, new_socket}
   end
+  def handle_info({:process_quality_update, hash, weight}, socket) do
+    router = socket.assigns.routing_pid
+    entry = Map.get(socket.assigns.sdp_pairs, hash)
+    case entry do
+      nil ->
+        :ok
+      %{creator_pid: creator_pid, partner_pid: partner_pid} ->
+        target_pid =
+          if creator_pid == self(), do: partner_pid, else: creator_pid
+        if is_pid(target_pid) do
+          try do
+            case GenServer.call(target_pid, {:get_name}, 6000) do
+              {:ok, target} ->
+                Routing.upsert_connection_quality(router, [%{source: socket.assigns.user, target: target, weight: weight}])
+
+              {:error, reason} ->
+                IO.warn("Peer replied with an error: #{inspect(reason)}")
+            end
+          catch
+            :exit, {:timeout, _} ->
+              IO.warn("GenServer.call timed out waiting for name from #{inspect(target_pid)}")
+          end
+        end
+    end
+    {:noreply, socket}
+  end
   def handle_info(protocol, socket) do
     IO.inspect(protocol, label: "Uncaught protocol")
     {:noreply, socket}
@@ -240,40 +266,8 @@ defmodule ConferenceWeb.Channel.Room do
     {:reply, :ok, socket}
   end
   def handle_in("connection_quality", %{"hash" => hash, "value" => weight}, socket) do
-    router = socket.assigns.routing_pid
-    entry = Map.get(socket.assigns.sdp_pairs, hash)
-    IO.inspect(socket.assigns, label: "Inspecting sdp_pairs in socket", pretty: true, limit: :infinity)
-    case entry do
-      nil ->
-        {:reply, :error, socket}
-      %{creator_pid: creator_pid, partner_pid: partner_pid} ->
-          target_pid =
-            if creator_pid == self() do
-              partner_pid
-            else
-              creator_pid
-          end
-          if is_pid(target_pid) do
-            try do
-              case GenServer.call(target_pid, {:get_name}, 6000) do
-                {:ok, target} ->
-                  IO.inspect(%{source: socket.assigns.user, target: target, weight: weight}, label: "JUST ADDED THIS TO ROUTING.")
-                  Routing.upsert_connection_quality(router, [%{source: socket.assigns.user, target: target, weight: weight}])
-                  {:reply, :ok, socket}
-                {:error, reason} ->
-                  IO.warn(reason)
-                  {:reply, :error, socket}
-              end
-            catch
-              :exit, _ ->
-                IO.warn("GenServer.call timed out waiting for name")
-                {:reply, :error, socket}
-            end
-          else
-            {:reply, :error, socket}
-          end
-      _ -> {:reply, :error, socket}
-    end
+    send(self(), {:process_quality_update, hash, weight})
+    {:noreply, socket}
   end
   def handle_in("multiple_connection_quality", %{"connections" => conn}, socket) do
     router = socket.assigns.routing_pid

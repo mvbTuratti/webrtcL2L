@@ -1,13 +1,24 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@nextui-org/react';
 import { MdNavigateBefore, MdNavigateNext } from 'react-icons/md';
-
+import { SocketContext } from '../Figma/FigmaTest'; 
 import ParticipantTile from './ParticipantTile';
 import LocalParticipantTile from './LocalParticipantTile';
 import { VideoCameraContext } from '../Figma/FigmaTest';
 import RoomControls from './RoomControls';
 import { useRoomLayout } from './useRoomLayout';
+
+interface ConferenceRoom {
+  userName: string
+  roomId: string
+  participants: Participant[]
+}
+
+interface Participant {
+  id: string;
+  name: string;
+  actors: { type: string; actor: any }[];
+}
 
 const ScreenShareView: React.FC<{ stream: MediaStream }> = ({ stream }) => {
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -26,30 +37,27 @@ const ScreenShareView: React.FC<{ stream: MediaStream }> = ({ stream }) => {
 const REMOTE_PER_PAGE_GRID = 3;
 const REMOTE_PER_PAGE_BAR = 4; 
 
-const ConferenceRoom: React.FC = () => {
-  const { roomId } = useParams<{ roomId: string }>();
-  const location = useLocation();
-  const { userName } = location.state || { userName: 'Anônimo' };
+const ConferenceRoom = ({userName, roomId, participants}: ConferenceRoom) => {
+  const { mediaStream, screenStream, camera, isSharingScreen } = VideoCameraContext.useSelector((state) => state.context);
 
-  const { userStream, screenStream, camera, isSharingScreen } = VideoCameraContext.useSelector((state) => state.context);
+  // const participants = [
+  //   { id: 1, name: 'Maria' }, { id: 2, name: 'João' }, { id: 3, name: 'Ana' },
+  //   { id: 4, name: 'Pedro' }, { id: 5, name: 'Sofia' }, { id: 6, name: 'Lucas' },
+  //   { id: 7, name: 'Julia' }, { id: 8, name: 'Mateus' },
+  // ];
 
-  const mockParticipants = [
-    { id: 1, name: 'Maria' }, { id: 2, name: 'João' }, { id: 3, name: 'Ana' },
-    { id: 4, name: 'Pedro' }, { id: 5, name: 'Sofia' }, { id: 6, name: 'Lucas' },
-    { id: 7, name: 'Julia' }, { id: 8, name: 'Mateus' },
-  ];
 
   const [gridPage, setGridPage] = useState(0);
   const [barPage, setBarPage] = useState(0);
 
-  const gridTotalPages = Math.ceil(mockParticipants.length / REMOTE_PER_PAGE_GRID);
-  const gridParticipantsToRender = mockParticipants.slice(
+  const gridTotalPages = Math.ceil(participants.length / REMOTE_PER_PAGE_GRID);
+  const gridParticipantsToRender = participants.slice(
     gridPage * REMOTE_PER_PAGE_GRID,
     (gridPage + 1) * REMOTE_PER_PAGE_GRID
   );
   
-  const barTotalPages = Math.ceil(mockParticipants.length / REMOTE_PER_PAGE_BAR);
-  const barParticipantsToRender = mockParticipants.slice(
+  const barTotalPages = Math.ceil(participants.length / REMOTE_PER_PAGE_BAR);
+  const barParticipantsToRender = participants.slice(
     barPage * REMOTE_PER_PAGE_BAR,
     (barPage + 1) * REMOTE_PER_PAGE_BAR
   );
@@ -62,7 +70,7 @@ const ConferenceRoom: React.FC = () => {
         {}
         <div className="w-full bg-black p-2 flex-shrink-0 flex items-center justify-center space-x-2">
           <div className="flex-shrink-0 w-40 h-auto">
-            <LocalParticipantTile name={userName} mediaStream={camera ? userStream : undefined} isSharingScreen={false} />
+            <LocalParticipantTile name={userName} mediaStream={camera ? mediaStream : undefined} isSharingScreen={false} />
           </div>
           
           <Button isIconOnly size="sm" variant="flat" onClick={() => setBarPage(p => Math.max(p - 1, 0))} isDisabled={barPage === 0}>
@@ -100,9 +108,9 @@ const ConferenceRoom: React.FC = () => {
       <div className="flex-1 w-full max-w-6xl flex items-center justify-center min-h-0">
         <div className={`p-4 ${layout.gridClass}`}>
           <div className={layout.tileClass}>
-            <LocalParticipantTile name={userName} mediaStream={camera ? userStream : undefined} isSharingScreen={false} />
+            <LocalParticipantTile name={userName} mediaStream={camera ? mediaStream : undefined} isSharingScreen={false} />
           </div>
-          {gridParticipantsToRender.map((participant) => (
+          {gridParticipantsToRender.length > 0 && gridParticipantsToRender.map((participant) => (
             <div className={layout.tileClass} key={participant.id}>
               <ParticipantTile name={participant.name} />
             </div>

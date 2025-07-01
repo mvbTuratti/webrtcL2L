@@ -1,30 +1,65 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 // import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { ProgressIndicators } from '../Joining/ProgressIndicator'; 
 import { SocketContext } from '../FigmaTest'; 
+import  ConferenceRoom  from '../../Room/ConferenceRoom'
 
 interface Permission {
-  room?: any;
-  userName?: string
+  room: any;
+  userName: string
 }
 
-const LoadingScreen = ({room, userName}:Permission) => {
+interface Participant {
+  id: string;
+  name: string;
+  actors: { type: string; actor: any }[];
+}
 
-    const isConnected = SocketContext.useSelector( (state : any) => {
-      return state.children.webrtcManager._snapshot.value === "connected"
-    } );
+
+const LoadingScreen = ({room, userName}:Permission) => {
+    const [done, setDone] = useState(false)
+    const [participants, setParticipants] = useState<Participant[]>([])
+    const socketActorRef = SocketContext.useActorRef();
     // const videoActorRef = VideoCameraContext.useActorRef();
-    // useEffect(() => {
-    //   if (isConnected) {
-    //     console.log("Socket is connected, navigating to conference...");
-    //   }
-    // }, [isConnected]); 
+    useEffect(() => {
+      const check = socketActorRef.on('CHECK_STATUS', (emittedEvent :any) => {
+        console.log("EMITTED EVENT!")
+        setDone(emittedEvent?.done || false)
+      })
+      const subscription = socketActorRef.on("USERS_AVAILABLE", (emittedEvent : any) => {
+        console.warn("Received USERS_AVAILABLE:", emittedEvent);
+        const usersEmitted = emittedEvent.users;
+        const rawUsers = Object.values(usersEmitted);
+        const usersMap = rawUsers.reduce((acc:any, currentUser:any) => {
+          if (!currentUser.user || currentUser.user === userName) {
+            return acc;
+          }
+          const { user, type, actor } = currentUser;
+          if (!acc[user]) {
+            acc[user] = {
+              id: user,
+              name: user,
+              actors: []
+            };
+          }
+          acc[user].actors.push({ type, actor });
+          return acc;
+        }, {});
+        const finalParticipants:Participant[] = Object.values(usersMap);
+        console.log("Transformed Participants:", finalParticipants);
+        setParticipants(finalParticipants);
+      });
+      return () => { 
+        subscription.unsubscribe()
+        check.unsubscribe()
+      };
+    }, [socketActorRef, setDone, setParticipants]); 
     
 
   return (
     <>
-    {isConnected ? (
-      <p>test</p>
+    {done ? (
+      <ConferenceRoom roomId={room} userName={userName} participants={participants}/>
     ) : (
       <div className="w-screen h-screen bg-black flex items-center justify-center">
         <div className="inline-flex flex-col items-center gap-[29px]">

@@ -164,6 +164,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
     initial: 'loading',
     context: {
       peerConnection: undefined, // will hold the actual WebRTC object
+      peerMedia: undefined,
       dataChannel: undefined,
       localSdp: undefined,
       candidates: [],

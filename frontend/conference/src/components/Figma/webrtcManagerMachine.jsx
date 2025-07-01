@@ -1,4 +1,4 @@
-import { createMachine, assign, spawnChild, enqueueActions, sendParent, sendTo } from 'xstate';
+import { createMachine, assign, spawnChild, enqueueActions, sendParent, sendTo, emit } from 'xstate';
 import createWebRTCConnectionMachine  from './webrtcConnectionMachine';
 
 export const webrtcManagerMachine = createMachine({
@@ -17,7 +17,7 @@ export const webrtcManagerMachine = createMachine({
     sharing: false,
     stream: null,
     screenSharing: null,
-    users: {}
+    users: {},
   },
   states: {
     start: {
@@ -34,7 +34,6 @@ export const webrtcManagerMachine = createMachine({
             newWebrtcs[hash] = webrtcActor
             const users = {...context.users}
             users[hash] = {actor: webrtcActor, user: "", status: "loading", type: "data"}
-            console.log("------- TRYING MEDIA UPDATE IN WEBACTOR", webrtcActor)
             return {
                 ...context,
                 webrtcs: newWebrtcs,
@@ -92,9 +91,10 @@ export const webrtcManagerMachine = createMachine({
                   createWebRTCConnectionMachine(user, pairType, 'instigator', date, hash, "", [], media, opts),
                   { name: hash }
                 );
-              const users = {...context.users}
+              let users = {...context.users}
               users[hash] = {actor: webrtcActor, user: user, type: pairType, status: "loading"}
               newWebrtc[hash] = webrtcActor
+              console.warn(users)
               return {
                 ...context,
                 webrtcs: newWebrtc,
@@ -111,7 +111,11 @@ export const webrtcManagerMachine = createMachine({
                   }
                 }
               )
-            })
+              enqueue.sendParent({
+                type: "child.EMIT_USERS",
+                users: context.users
+              })
+            }),
           ]
         },
         // DISCONNECT_CONNECTION: {
@@ -180,76 +184,110 @@ export const webrtcManagerMachine = createMachine({
     },
     MAKE_PAIR: {
       entry: () => console.log("HERE IN ENTRY OF MAKE PAIR!!!!!!!!\N"),
-      actions: enqueueActions((({ enqueue, event, context }) => {
-        const { hash, sdp, ice, user } = event.data;
-        // const machineName = context.hashes[hash]; // TODO: add some level of fallback?
-        // console.log("MACHINE NAME", context.hashes)
-        // console.log(context.webrtcs, hash, sdp, ice)
-        const actor = context.webrtcs[hash]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
-        if (actor) {
-          const payload = { sdp, ice, user };
-          enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
-          const users = {...context.users}
-          users[hash] = {actor: actor, user: user, status: "loading", type: "data"}
-          enqueue.assign({
-            users: users
-          })
-        }
-      }))
+      actions: [
+        enqueueActions((({ enqueue, event, context }) => {
+          const { hash, sdp, ice, user } = event.data;
+          // const machineName = context.hashes[hash]; // TODO: add some level of fallback?
+          // console.log("MACHINE NAME", context.hashes)
+          // console.log(context.webrtcs, hash, sdp, ice)
+          const actor = context.webrtcs[hash]; // TODO: hardcoded as assumed that frontend will handle all other scenarios...
+          if (actor) {
+            const payload = { sdp, ice, user };
+            enqueue.sendTo(actor,{ type: 'MAKE_PAIR', data: payload });
+            let users = {...context.users}
+            users[hash] = {actor: actor, user: user, status: "loading", type: "data"}
+            enqueue.assign({
+              users: users
+            })
+            console.warn(users)
+            enqueue.sendParent({
+              type: "child.EMIT_USERS",
+              users: users
+            })
+          }
+        })),
+    ]
     },
     CURRENT_USERS_SDP: {
-      actions: assign(({event, context, spawn }) => {
-        // console.log("--------++++----- CURRENT_USERS_SDP ENVET", event)
-        if (!event.data || event.data.length === 0) {
-          return {
-            ...context
-          }
-        }
-        let newWebrtcs = { ...context.webrtcs };
-        // let hashes = {...context.hashes};
-        const users = {...context.users}
-        event.data.forEach(pair => {
-          // console.log("WHAT DO I HAVE HERE???", pair)
-          const { user, sdp, ice, hash } = pair;
-          const pairType = "data"
-          const date = Date.now().toString()
-          const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
-          let webrtcActor = spawn(
-            createWebRTCConnectionMachine(user, pairType, 'receiver', date, hash, sdp, ice, false, opts),
-            { name: hash }
+      actions: [
+        assign(({event, context, spawn }) => {
+            // console.log("--------++++----- CURRENT_USERS_SDP ENVET", event)
+            if (!event.data || event.data.length === 0) {
+              return {
+                ...context
+              }
+            }
+            let newWebrtcs = { ...context.webrtcs };
+            // let hashes = {...context.hashes};
+            let users = {...context.users}
+            event.data.forEach(pair => {
+              // console.log("WHAT DO I HAVE HERE???", pair)
+              const { user, sdp, ice, hash } = pair;
+              const pairType = "data"
+              const date = Date.now().toString()
+              const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
+              let webrtcActor = spawn(
+                createWebRTCConnectionMachine(user, pairType, 'receiver', date, hash, sdp, ice, false, opts),
+                { name: hash }
+              );
+              users[hash] = {actor: webrtcActor, user: user, status: "loading", type: pairType}
+              newWebrtcs[hash] = webrtcActor
+              console.warn(users)
+            });
+            return {
+              ...context,
+              webrtcs: newWebrtcs,
+              users: users
+            };
+          }),
+        enqueueActions(({ context, event, enqueue }) => {
+          const allUsers = Object.values(context.users);
+          const anyUserIsSet = allUsers.some(
+            (userData) => {
+              return userData.user && userData.user !== context.user && userData.user.length > 0
+            }
           );
-          users[hash] = {actor: webrtcActor, user: user, status: "loading", type: pairType}
-          newWebrtcs[hash] = webrtcActor
-        });
-        return {
-          ...context,
-          webrtcs: newWebrtcs,
-          users: users
-        };
-      })
+          if (!anyUserIsSet) {
+            enqueue.sendParent({
+              type: "child.EMIT_DONE",
+              done: true
+            });
+          }
+          enqueue.sendParent({
+            type: "child.EMIT_USERS",
+            users: context.users
+          })
+        })
+      ]
     },
     USER_LEFT: {
-      actions: enqueueActions(({ context, event, enqueue }) => {
-        const { hashes } = event.data;
-        hashes.forEach(hash => {
-          const actor = context.webrtcs[hash];
-          if (actor) {
-            enqueue.sendTo(actor, { type: 'DISCONNECT' });
-          }
-        });
-        enqueue.assign({
-          webrtcs: (context) => {
-            const newWebrtcs = { ...context.webrtcs };
-            hashes.forEach(hash => delete newWebrtcs[hash]);
-            return newWebrtcs;
-          },
-          users: (context) => {
-            const users = { ...context.users};
-            hashes.forEach(hash => delete users[hash]);
-            return users;
-          }
-        });
-      })
+      actions: [
+        enqueueActions(({ context, event, enqueue }) => {
+          const { hashes } = event.data;
+          hashes.forEach(hash => {
+            const actor = context.webrtcs[hash];
+            if (actor) {
+              enqueue.sendTo(actor, { type: 'DISCONNECT' });
+            }
+          });
+          enqueue.assign({
+            webrtcs: ({context}) => {
+              let newWebrtcs = { ...context.webrtcs };
+              hashes.forEach(hash => delete newWebrtcs[hash]);
+              return newWebrtcs;
+            },
+            users: ({context}) => {
+              let users = { ...context.users};
+              hashes.forEach(hash => delete users[hash]);
+              return users;
+            }
+          });
+          enqueue.sendParent({
+            type: "child.EMIT_USERS",
+            users: context.users
+          })
+        }),
+      ]
     },
     ICE_UPDATE_SERVER: {
       actions: enqueueActions(({ context, event, enqueue }) => {
@@ -276,11 +314,15 @@ export const webrtcManagerMachine = createMachine({
           let newWebrtcs = { ...context.webrtcs };
           const opts = {camera: context.camera, microphone: context.microphone, sharing: context.sharing}
           const webrtcActor = spawn(
-            createWebRTCConnectionMachine(date, 'data', 'instigator', date, name, "", [], false, opts),{ name: name })
+            createWebRTCConnectionMachine(context.user, 'data', 'instigator', date, name, "", [], false, opts),{ name: name })
           newWebrtcs[name] = webrtcActor
+          let users = {...context.users}
+          users[name] = {actor: webrtcActor, user: context.user, type: "data", status: "loading"}
+          console.warn(users)
           return {
             ...context,
-            webrtcs: newWebrtcs
+            webrtcs: newWebrtcs,
+            users: users
           }
         }
       )
@@ -326,24 +368,37 @@ export const webrtcManagerMachine = createMachine({
       ),
     },
     "child.SET_AS_DONE": {
-      actions: assign(({event, context}) => {
-        const users = {...context.users}
-        users[hash].status = "done"
-        return {
-          ...context,
-          users: users
-        }
-      })
+      actions: [
+        assign(({event, context}) => {
+          let users = {...context.users}
+          users[hash].status = "done"
+          return {
+            ...context,
+            users: users
+          }
+      }),
+      enqueueActions(({ enqueue, event, context }) =>  {
+        enqueue.sendParent({
+          type: "child.EMIT_USERS",
+          users: context.users
+        })
+      }),
+      ]
     },
     "child.UPSERT_CONNECTION_VALUE": {
-      actions: enqueueActions(({ enqueue, event, context }) => {
-        console.log("------ child.UPSERT_CONNECTION_VALUE --------", event)
-        enqueue.sendParent({
-          type: 'child.UPSERT_CONNECTION_VALUE',
-          ...event
-        });
-        }
-      ),
+      actions: [
+        enqueueActions(({ enqueue, event, context }) => {
+          console.log("------ child.UPSERT_CONNECTION_VALUE --------", event)
+          enqueue.sendParent({
+            type: 'child.UPSERT_CONNECTION_VALUE',
+            ...event
+          });
+          enqueue.sendParent({
+            type: "child.EMIT_DONE",
+            done: true
+          })
+        }),
+      ]
     },
   }
 });

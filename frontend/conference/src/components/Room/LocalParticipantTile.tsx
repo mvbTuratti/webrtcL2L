@@ -6,7 +6,7 @@ interface LocalParticipantTileProps {
   isSharingScreen: boolean;
 }
 
-const LocalParticipantTile: React.FC<LocalParticipantTileProps> = ({ name, mediaStream, isSharingScreen }) => {
+const LocalParticipantTile = ({ name, mediaStream, isSharingScreen }: LocalParticipantTileProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {

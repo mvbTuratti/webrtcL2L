@@ -1,4 +1,4 @@
-import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sendParent, enqueueActions, createMachine } from 'xstate';
+import { assign, fromPromise, setup, spawnChild, raise, sendTo, createActor, sendParent, enqueueActions, createMachine, emit } from 'xstate';
 import { Socket } from 'phoenix';
 import webrtcManagerMachine from './webrtcManagerMachine';
 
@@ -26,6 +26,14 @@ async function connectSocket(room, user, sdp, type, hash) {
 const websocketMachine = setup(
   {
     actions: {
+      emitUsers: emit(({ context }) => ({
+        type: 'USERS_AVAILABLE',
+        users: context.users,
+      })),
+      emitDone: emit(({context}) => ({
+        type: "CHECK_STATUS",
+        done: context.done 
+      }))
     },
     actors: {
       setupSocketConnection: fromPromise(({input}) => connectSocket(input.room, input.user, input.sdp, input.format, input.hash))
@@ -41,6 +49,8 @@ const websocketMachine = setup(
     webrtcManager: spawn(webrtcManagerMachine, { id: 'webrtcManager' }),
     room: "", 
     user: "",
+    users: {},
+    done: false
   }),
   states: {
     waiting: {
@@ -244,12 +254,7 @@ const websocketMachine = setup(
             console.log("!!! ---  child.UPSERT_CONNECTION_VALUE", event)
             const { value, hash } = event;
             if (context.channel && value && hash) {
-              context.channel.push("connection_quality", { hash, value }).receive("ok", (response) => {
-                  console.log("ACK'd SDP Value of UPSERT_CONNECTION_VALUE:", response);
-                })
-                .receive("error", (reason) => {
-                  console.error("Server rejected batched UPSERT_CONNECTION_VALUE:", reason);
-                });;
+              context.channel.push("connection_quality", { hash, value })
             } else {
               console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
                 hasChannel: !!context.channel
@@ -265,6 +270,27 @@ const websocketMachine = setup(
       actions: enqueueActions((({ enqueue, event, context }) => {
         enqueue.sendTo(context.webrtcManager, event)
       }))
+    },
+    "child.EMIT_USERS": {
+      actions: [
+        ({event}) => {
+          console.warn(`HERE IN EMIT USERS:`)
+          console.log(event)
+        },
+        assign(({event, context }) => {
+          return {...context, users: event.users}
+        }),
+        { type: 'emitUsers' }
+      ]
+    },
+    "child.EMIT_DONE": {
+      entry: () => console.log("-------------------111221 EMIT DONE -=-------"),
+      actions: [
+        assign(({event, context }) => {
+          return {...context, done: event.done}
+        }),
+        { type: 'emitDone' }
+      ]
     },
     "child.PUSH_PARTIAL_ICE_CANDIDATE": {
       actions: ({ context, event, self }) => {
