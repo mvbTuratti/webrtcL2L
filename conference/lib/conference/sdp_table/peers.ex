@@ -7,7 +7,7 @@ defmodule Conference.SdpTable.Peers do
   # - pending: negotiations not yet matched.
   # - active: negotiations that have been matched.
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, %{pending: %{}, active: %{}}, opts)
+    GenServer.start_link(__MODULE__, %{pending: %{}, active: %{}, }, opts)
   end
 
   @doc """
@@ -21,8 +21,8 @@ defmodule Conference.SdpTable.Peers do
       by associating them with the caller’s channel PID.
   3. Returns a map of matched negotiations.
   """
-  def join_negotiation(pid \\ __MODULE__, hash, sdp, channel_pid, connection_type \\ "data", refill \\ false, name \\ "user", opts \\ []) do
-    GenServer.call(pid, {:join_negotiation, hash, sdp, channel_pid, connection_type, refill, name, opts})
+  def join_negotiation(pid \\ __MODULE__, hash, sdp, channel_pid, connection_type \\ "data", refill \\ false, name \\ "user", opts \\ [], target \\ "user") do
+    GenServer.call(pid, {:join_negotiation, hash, sdp, channel_pid, connection_type, refill, name, opts, target})
   end
 
   @doc """
@@ -118,13 +118,13 @@ defmodule Conference.SdpTable.Peers do
         {:reply, {:ok, :success}, %{state | pending: new_pending}, @timeout}
 
       true ->
-        IO.inspect({:update_ice, hash, new_ice, user_pid}, label: "ERROR in handle call of PEERS ICE UPDATE")
+        IO.inspect({:update_ice, hash, user_pid}, label: "ERROR in handle call of PEERS ICE UPDATE")
         {:reply, {:error, :not_found}, state, @timeout}
     end
   end
   @impl true
-  def handle_call({:join_negotiation, hash, sdp, channel_pid, connection_type, refill, name, opts}, _from, state) do
-    state = maybe_insert_entry(hash, sdp, channel_pid, connection_type, state, name)
+  def handle_call({:join_negotiation, hash, sdp, channel_pid, connection_type, refill, name, opts, target}, _from, state) do
+    state = maybe_insert_entry(hash, sdp, channel_pid, connection_type, state, name, target)
 
     {matches, new_state} =
       case connection_type do
@@ -181,7 +181,7 @@ defmodule Conference.SdpTable.Peers do
     end)
   end
 
-  defp maybe_insert_entry(hash, sdp, channel_pid, connection_type, state, name) do
+  defp maybe_insert_entry(hash, sdp, channel_pid, connection_type, state, name, target) do
     if Map.has_key?(state.pending, hash) or Map.has_key?(state.active, hash) do
       state
     else
@@ -191,7 +191,8 @@ defmodule Conference.SdpTable.Peers do
         creator_pid: channel_pid,
         connection_type: connection_type,
         partner_pid: nil,
-        name: name
+        name: name,
+        target: target
       }
       %{state | pending: Map.put(state.pending, hash, entry)}
     end

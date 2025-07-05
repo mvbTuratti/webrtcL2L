@@ -38,12 +38,12 @@ defmodule ConferenceWeb.Channel.Room do
     IO.puts("join")
     IO.inspect(room, label: "ROOM IN JOIN!!")
     PubSub.subscribe(Conference.PubSub, room)
-    # {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online", pid: self()})
-    {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online"})
+    {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online", pid: self()})
+    # {:ok, _} = Conference.Presence.track(socket, socket.assigns.user, %{status: "online"})
     {routing_pid, peerfinding_pid} = get_state_pids(room)
     # hash = Peers.generate_hash(socket.assigns.user)
     # hash, sdp, channel_pid, connection_type, refill, name, opts
-    current_users = Peers.join_negotiation(peerfinding_pid,socket.assigns.hash, socket.assigns.sdp, self(), "data", false, socket.assigns.user)
+    current_users = Peers.join_negotiation(peerfinding_pid,socket.assigns.hash, socket.assigns.sdp, self(), "data", false, socket.assigns.user, [], socket.assigns.user)
     users = Enum.reduce(current_users, [], fn {_key, %{name: user}}, acc ->
       [ user | acc ]
     end)
@@ -53,7 +53,8 @@ defmodule ConferenceWeb.Channel.Room do
     |> assign(:room, room)
     |> assign(:pairs, users)
     # |> assign(:hash, hash)
-
+    IO.inspect(peerfinding_pid)
+    IO.inspect(routing_pid)
     # warn_users_they_should_create_new_sdps(users, socket.assigns.room, socket.assigns.user)
     # IO.inspect(socket, label: "room.ex: User #{socket.id} - Room #{room} // after changes to subscription")
     send(self(), :after_join)
@@ -112,8 +113,8 @@ defmodule ConferenceWeb.Channel.Room do
     sdp_pairs = Enum.reduce(socket.assigns.sdp_pairs, [],fn {hash, %{name: user, sdp: sdp, ice: ice}}, acc ->
       [%{hash: hash, user: user, sdp: sdp, ice: ice}  | acc]
     end)
-    IO.inspect(sdp_pairs, label: "Inspecting sdp_pairs in socket", pretty: true, limit: :infinity)
-    IO.inspect(socket.assigns.sdp_pairs, label: "Inspecting saved values", pretty: true, limit: :infinity)
+    # IO.inspect(sdp_pairs, label: "Inspecting sdp_pairs in socket", pretty: true, limit: :infinity)
+    # IO.inspect(socket.assigns.sdp_pairs, label: "Inspecting saved values", pretty: true, limit: :infinity)
     push(socket, "sdp_pairs", %{"sdp_pairs" => sdp_pairs})
     push(socket, "pairs", %{"pairs" => socket.assigns.pairs})
     # push(socket, "join_hash", %{"hash" => socket.assigns.hash, "origin" => socket.assigns.origin})
@@ -191,22 +192,22 @@ defmodule ConferenceWeb.Channel.Room do
     case entry do
       nil ->
         :ok
-      %{creator_pid: creator_pid, partner_pid: partner_pid} ->
-        target_pid =
-          if creator_pid == self(), do: partner_pid, else: creator_pid
-        if is_pid(target_pid) do
-          try do
-            case GenServer.call(target_pid, {:get_name}, 6000) do
-              {:ok, target} ->
-                Routing.upsert_connection_quality(router, [%{source: socket.assigns.user, target: target, weight: weight}])
-
-              {:error, reason} ->
-                IO.warn("Peer replied with an error: #{inspect(reason)}")
+      %{creator_pid: creator_pid, partner_pid: partner_pid, name: name} ->
+        cond do
+          creator_pid != self() ->
+            Routing.upsert_connection_quality(router, [%{source: socket.assigns.user, target: name, weight: weight}])
+          true ->
+            try do
+              case GenServer.call(partner_pid, {:get_name}, 5000) do
+                {:ok, target} ->
+                  Routing.upsert_connection_quality(router, [%{source: socket.assigns.user, target: target, weight: weight}])
+                {:error, reason} ->
+                  IO.warn("Peer replied with an error: #{inspect(reason)}")
+              end
+            catch
+              :exit, {:timeout, _} ->
+                IO.warn("GenServer.call timed out waiting for name ")
             end
-          catch
-            :exit, {:timeout, _} ->
-              IO.warn("GenServer.call timed out waiting for name from #{inspect(target_pid)}")
-          end
         end
     end
     {:noreply, socket}
@@ -241,19 +242,17 @@ defmodule ConferenceWeb.Channel.Room do
     {:reply, term, socket}
   end
   def handle_in("finish_webrtc", %{"hash" => hash, "ice" => ice, "sdp" => sdp}, socket) do
-    IO.inspect(%{"hash" => hash, "ice" => ice, "sdp" => sdp}, label: "Handle IN")
+    IO.inspect(%{"hash" => hash}, label: "Handle IN")
     peer = socket.assigns.sdp_pairs[hash]
     send(peer.creator_pid, {:private_message, %{protocol: :finish_webrtc, hash: hash, ice: ice, sdp: sdp}})
     {:reply, :ok, socket}
   end
-  def handle_in("new_webrtc", %{"sdp" => sdp, "hash" => hash, "type" => type}, socket) do
+  def handle_in("new_webrtc", %{"sdp" => sdp, "hash" => hash, "type" => type, "target" => target}, socket) do
     # hash = Peers.generate_hash(socket.assigns.user)
     peerfinding_pid = socket.assigns.peerfinding_pid
     # hash, sdp, channel_pid, connection_type, refill, name, opts
-    IO.inspect(socket.assigns.pairs, label: "SENDING THESE PAIRS")
-    current_users = Peers.join_negotiation(peerfinding_pid, hash, sdp, self(), type, true, socket.assigns.user, socket.assigns.pairs)
-    IO.inspect(current_users, label: "Inspecting sdp_pairs in socket", pretty: true, limit: :infinity)
-    IO.inspect(socket.assigns.user, label: "FOR USER")
+    current_users = Peers.join_negotiation(peerfinding_pid, hash, sdp, self(), type, true, socket.assigns.user, socket.assigns.pairs, target)
+    # IO.inspect(current_users, label: "Inspecting sdp_pairs in socket", pretty: true, limit: :infinity)
     sdp_pairs = Enum.reduce(current_users, [],fn {hash, %{name: user, sdp: sdp, ice: ice}}, acc ->
       [%{hash: hash, user: user, sdp: sdp, ice: ice}  | acc]
     end)
@@ -276,27 +275,32 @@ defmodule ConferenceWeb.Channel.Room do
     Routing.upsert_connection_quality(router, modified)
     {:noreply, socket}
   end
-  def handle_in("add_stream", %{type: type}, socket) do
+  def handle_in("add_stream", %{"type" => type}, socket) do
+    IO.inspect({"add_stream", %{"type" => type}})
     cond do
       type in @available_types ->
         router = socket.assigns.routing_pid
         create_stream_for_user(router, type, socket.assigns.user)
+        IO.inspect("Sending OK back")
         {:reply, :ok , socket}
+      true ->
+        IO.inspect("FAILED!")
+        {:reply, :error, socket}
+    end
+  end
+  def handle_in("request_recommendation", %{"media" => type, "streamer" => stream_user}, socket) do
+    IO.inspect({"request_recommendation", %{"media" => type, "streamer" => stream_user}})
+    cond do
+      type in @available_types ->
+        router = socket.assigns.routing_pid
+        result = Routing.join_stream(router, get_stream_type(type), stream_user, socket.assigns.user)
+        IO.inspect({"request_recommendation", result}, label: "RESULTS")
+        {:reply, result, socket}
       true ->
         {:reply, :error, socket}
     end
   end
-  def handle_in("request_recommendation", %{type: type, stream: stream_user}, socket) do
-    cond do
-      type in @available_types ->
-        router = socket.assigns.routing_pid
-        {result, recommendation} = Routing.join_stream(router, get_stream_type(type), stream_user, socket.assigns.user)
-        {:reply, :ok, recommendation, socket}
-      true ->
-        {:reply, :error, "invalid type", socket}
-    end
-  end
-  def handle_in("leave_stream", %{type: type, stream: stream_user}, socket) do
+  def handle_in("leave_stream", %{"type" => type, "stream" => stream_user}, socket) do
     cond do
       type in @available_types ->
         router = socket.assigns.routing_pid

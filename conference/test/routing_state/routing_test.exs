@@ -142,7 +142,7 @@ defmodule ConferenceWeb.RoutingTest do
       state_before = :sys.get_state(room_pid)
       stream_a_graph_before = state_before.high_quality["streamerA"]
       assert [%{v1: "viewerB"}] = Graph.in_edges(stream_a_graph_before, "viewerC")
-      assert {:ok, %{high_quality: [{:ok, "streamerA", "streamerA"}], low_quality: [], audio_only: []}} == Routing.remove_user(room_pid, "viewerB")
+      assert {:ok, %{high_quality: [{:ok, "streamerA", "streamerA"}], low_quality: [], audio_only: [], sharing: []}} == Routing.remove_user(room_pid, "viewerB")
       state_after = :sys.get_state(room_pid)
       stream_a_graph_after = state_after.high_quality["streamerA"]
       refute Graph.has_vertex?(stream_a_graph_after, "viewerB")
