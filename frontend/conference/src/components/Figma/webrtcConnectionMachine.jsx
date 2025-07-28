@@ -2,34 +2,34 @@ import { createMachine, assign, setup, sendParent, enqueueActions, fromPromise, 
 
 const connectionMonitorLogic = fromCallback(({ sendBack, input }) => {
     const { peerConnection } = input;
-    console.log('Unified Connection Monitor has STARTED!');
+    // console.log('Unified Connection Monitor has STARTED!');
     let burstIntervalId = null;
     let cooldownTimeoutId = null;
   
     const pollStats = () => {
-      if (!peerConnection || peerConnection.connectionState !== 'connected') return;
-      peerConnection.getStats().then(stats => {
-        let metrics = { availableBitrate: null };
-        for (const report of stats.values()) {
-          if (report.type === 'candidate-pair' && report.nominated === true) {
-            metrics.availableBitrate = report.availableOutgoingBitrate;
-            break;
-          }
-        }
-        sendBack({ type: 'STATS_UPDATED', data: metrics });
-      }).catch(error => console.error("Error polling getStats:", error));
+    //   if (!peerConnection || peerConnection.connectionState !== 'connected') return;
+    //   peerConnection.getStats().then(stats => {
+    //     let metrics = { availableBitrate: null };
+    //     for (const report of stats.values()) {
+    //       if (report.type === 'candidate-pair' && report.nominated === true) {
+    //         metrics.availableBitrate = report.availableOutgoingBitrate;
+    //         break;
+    //       }
+    //     }
+    //     sendBack({ type: 'STATS_UPDATED', data: metrics });
+    //   }).catch(error => console.error("Error polling getStats:", error));
       sendBack({ type: 'TRIGGER_PING' });
     };
   
     const startCooldown = () => {
-      console.log('Monitor entering 57-second cooldown...');
+    //   console.log('Monitor entering 57-second cooldown...');
       clearInterval(burstIntervalId);
       sendBack({type: 'SEND_PERFORMANCE'})
       cooldownTimeoutId = setTimeout(startBurst, 57000);
     };
   
     const startBurst = () => {
-      console.log('Monitor starting 3-second polling burst...');
+    //   console.log('Monitor starting 3-second polling burst...');
       
       burstIntervalId = setInterval(pollStats, 500);
       cooldownTimeoutId = setTimeout(startCooldown, 3000);
@@ -37,14 +37,14 @@ const connectionMonitorLogic = fromCallback(({ sendBack, input }) => {
   
     startBurst();
     return () => {
-      console.log('Unified Connection Monitor has STOPPED.');
+    //   console.log('Unified Connection Monitor has STOPPED.');
       clearInterval(intervalId);
     };
 });
 
 async function setAnswerAndCandidates({ peerConnection, sdp, ice }) {
-    console.log("HEY! STEP 3. ADDING THE RESPONSE")
-    console.log("HEY! STEP 3. ICES")
+    // console.log("HEY! STEP 3. ADDING THE RESPONSE")
+    // console.log("HEY! STEP 3. ICES")
     if (!peerConnection || !sdp) {
         return Promise.reject(new Error("Missing peerConnection or SDP answer."));
     }
@@ -53,19 +53,20 @@ async function setAnswerAndCandidates({ peerConnection, sdp, ice }) {
         const results = await Promise.allSettled(
             ice.map(candidate => candidate ? peerConnection.addIceCandidate(candidate) : null)
         );
-        results.forEach(result => {
-            if (result.status === 'rejected') {
-            console.warn("Could not add an ICE candidate:", result.reason);
-            }
-        });
+        // results.forEach(result => {
+        //     if (result.status === 'rejected') {
+        //     console.warn("Could not add an ICE candidate:", result.reason);
+        //     }
+        // });
     }
 }
 
 async function createOfferPromise(peerConnection) {
+    // console.warn(`6. CREATE OFFER ${peerConnection}`)
     const pc = peerConnection.input || peerConnection;
     let offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    console.log("HEY! STEP 1. CREATED THE OFFER")
+    // console.log("HEY! STEP 1. CREATED THE OFFER")
     return offer;
 }
 
@@ -77,9 +78,9 @@ async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandi
       )
     );
     results.forEach(result => {
-        if (result.status === 'rejected') {
-            console.warn("Could not add an ICE candidate:", result.reason);
-        }
+        // if (result.status === 'rejected') {
+        //     // console.warn("Could not add an ICE candidate:", result.reason);
+        // }
     });
     const allFailed = results.every(r => r.status === 'rejected');
     if (allFailed && iceCandidates.length > 0) {
@@ -87,7 +88,7 @@ async function createAnswerAndSetCandidates({ peerConnection, offerSdp, iceCandi
     }
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-    console.log("HEY! STEP 2. SET THE OFFER")
+    // console.log("HEY! STEP 2. SET THE OFFER")
     return peerConnection.localDescription;
 }
 
@@ -95,35 +96,51 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
   setup(  {
     actions: {
       createWebRTCObject: assign(({context, event, self}) => {
+        // console.warn(`2 - CREATING WEBRTC OBJECT ${context.name}`)
         const peerConnection = new RTCPeerConnection(context.configuration);
+        if (context.pairType !== 'data' && context.media) {
+            // console.log(`Adding media tracks for connection ${context.name}`);
+            context.media.getTracks().forEach(track => {
+              peerConnection.addTrack(track, context.media);
+            });
+          }
+          peerConnection.ontrack = (event) => {
+            // console.log(`[${context.name}] Received remote track!`);
+            const remoteStream = event.streams[0];
+            self.send({ type: 'PEER_STREAM_RECEIVED', stream: remoteStream});
+        };
         const setupDataChannelListeners = (channel) => {
             channel.onmessage = (event) => {
             //   console.log('Data channel message received:', event.data);
               self.send({ type: 'DATA_RECEIVED', data: event.data });
             };
             channel.onopen = () => {
-                console.log('--------- Data channel has opened! --------- ', context.name);
+                // console.log('--------- Data channel has opened! --------- ', context.name);
                 self.send({ type: 'DATA_CHANNEL_READY' });
+                // self.send({ type: 'DATA_CHANNEL_OPENED', channel: channel})
             };
-            channel.onclose = () => console.log('Data channel closed!');
+            // channel.onclose = () => console.log('Data channel closed!');
           };
         let dataChannel;
-        console.log(context.mode, context.pairType, "HEEEEYEYYYY -!!! CHECK THIS:")
         if (context.mode === 'instigator' && context.pairType === 'data') {
+            // console.warn(`3 - CREATING DATA CHANNEL ${context.name}`)
             dataChannel = peerConnection.createDataChannel('chat');
             setupDataChannelListeners(dataChannel);
         } else if(context.mode === 'receiver' && context.pairType === 'data') {
+            // console.warn(`3 - CREATING DATA CHANNEL ${context.name}`)
             peerConnection.ondatachannel = (event) => {
-              console.log('Receiver got data channel!');
+            //   console.log('Receiver got data channel!');
               const receivedChannel = event.channel;
               self.send({ type: 'DATA_CHANNEL_OPENED', channel: receivedChannel });
               setupDataChannelListeners(receivedChannel);
             }
+        } else {
+            // console.warn(`3 - NOT DATA TYPE. SKIPPING DATA CHANNEL CREATION. ${context.name}`)
         }
         return { ...context, peerConnection, dataChannel };
       }),
       pushPartialSDP: enqueueActions(({ context, enqueue, event }) => {
-            // console.log("--------------- PUSH PARTIAL SDP EVENT", event, context)
+            // console.log("--------------- PUSH PARTIAL ICE CANDIDATE", context.name)
             enqueue.sendParent(
                 { type: 'child.PUSH_PARTIAL_ICE_CANDIDATE', message: {
                     latestCandidate: event.candidate,
@@ -137,7 +154,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
       cleanupConnection: ({ context }) => {
         const { peerConnection, dataChannel } = context;
         if (peerConnection) {
-          console.log(`Cleaning up connection for ${context.name}`);
+        //   console.log(`Cleaning up connection for ${context.name}`);
           peerConnection.onicecandidate = null;
           peerConnection.ondatachannel = null;
           peerConnection.onconnectionstatechange = null;
@@ -203,7 +220,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
             initial: 'gatheringOffer',
             states: {
               gatheringOffer: {
-                entry: () => console.log("Instigator: Creating offer..."),
+                // entry: ({context}) => console.warn(`4 - SETTING EVENT LISTENERS ${context.name}`),
                 invoke: {
                   src: 'createOffer',
                   input: (({ context }) => context.peerConnection),
@@ -215,7 +232,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                             localSdp: event.output
                         })
                         context.peerConnection.onicecandidate = (e) => {
-                            // console.log("---------ICE CANDIDATE--------", e)
+                            // console.warn("1. ---------ICE CANDIDATE--------", context.name)
                             if (e.candidate) {
                               self.send({ type: 'ICE_CANDIDATE', candidate: e.candidate, hash: context.name });
                             }
@@ -223,7 +240,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         context.peerConnection.addEventListener('connectionstatechange', event => {
                             if (context.peerConnection.connectionState === 'connected') {
                                 // Peers connected!
-                                console.log("WOOOOOOWZERR!! CONNECTED MUCH??")
+                                // console.log("WOOOOOOWZERR!! CONNECTED MUCH??")
                                 self.send({ type: 'CONNECTED' });
                             }
                         });
@@ -231,24 +248,25 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                         enqueue.sendParent({ type: 'child.SDP_VALUE', message: {
                             sdp: event.output,
                             format: context.pairType,
-                            hash: context.name
+                            hash: context.name,
+                            target: context.pairName
                         }})
                       }),
                   },
                   onError: {
                     target: 'failed',
-                    actions: ({ event }) => console.error("Failed to create offer", event.data)
+                    // actions: ({ event }) => console.error("Failed to create offer", event.data)
                   }
                 },
               },
               waitingForAnswer: {
-                entry: () => console.log('Instigator: Waiting for answer from peer...'),
+                // entry: () => console.warn('5 - WAITING FOR PEER ANSWER'),
                 on: {
                   MAKE_PAIR: { target: 'settingAnswer' }
                 }
               },
               settingAnswer: {
-                entry: () => console.log('Instigator: Received answer, processing...'),
+                // entry: () => console.warn('6 - RECEIVED ANSWER, SETTING PEER'),
                 invoke: {
                   src: 'setAnswer',
                   input: ({ context, event }) => ({
@@ -262,7 +280,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                   },
                   onError: {
                     target: 'failed',
-                    actions: ({ event }) => console.error("Failed to set answer:", event.data)
+                    // actions: ({ event }) => console.error("Failed to set answer:", event.data)
                   }
                 }
               },
@@ -277,7 +295,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
           },
         negotiatingReceiver: {
             initial: 'creatingAnswer',
-            entry: ({context}) => console.log("Entering receiver negotiation flow...", context.ice),
+            // entry: ({context}) => console.log("Entering receiver negotiation flow...", context.ice),
             states: {
               creatingAnswer: {
                 invoke: {
@@ -290,7 +308,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                   onDone: {
                     target: 'gatheringCandidates',
                     actions: enqueueActions(({ context, enqueue, event, self }) => {
-                      console.log("Answer created successfully, now gathering candidates:", event.output);
+                    //   console.log("Answer created successfully, now gathering candidates:", event.output);
                       enqueue.assign({
                         localSdp: event.output
                       });
@@ -316,7 +334,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                   },
                   onError: {
                     target: 'error',
-                    actions: ({ event }) => console.error("Failed to create answer:", event.data)
+                    // actions: ({ event }) => console.error("Failed to create answer:", event.data)
                   }
                 }
               },
@@ -327,7 +345,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                     // },
                     CONNECTED: {
                         target: '#connected',
-                        entry: console.log("moving to CONNECTED")
+                        // entry: console.log("moving to CONNECTED")
                     }
                 }
               },
@@ -348,7 +366,11 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
         connected: {
             id: 'connected',
             initial: 'checkingForDataChannel',
-            entry: () => console.log("REACHED CONNECTED Machine connected, checking for data channel..."),
+            // entry: enqueueActions(({ context, enqueue, event }) => {
+            //     // console.warn("SHOULD HAVE REACHED HERE.")
+            //     // enqueue.sendParent({type: "child.SET_AS_DONE", hash: context.name})
+            // })
+            // ,
             states: {
               checkingForDataChannel: {
                 always: [
@@ -360,15 +382,22 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 initial: 'opening',
                 states: {
                   opening: {
-                    entry: () => console.log('Data channel is opening..'),
+                    entry: () => console.log('1 . Data channel is opening..'),
                     on: {
                       DATA_CHANNEL_READY: {
-                        target: 'ready'
+                        target: 'ready',
+                        actions: 
+                            ({ self }) => {
+                                self.send({type: "SET_DONE"})
+                            }
+                        
                       }
                     }
                   },
                   ready: {
+                    id: "READY",
                     entry: [
+                        // ({}) => console.log("2. ENTERED READY STATE"),
                         assign({
                             qualityMonitorRef: ({ spawn, context }) => {
                                 return spawn('connectionMonitorLogic', {
@@ -376,7 +405,8 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                                 });
                             }
                         }),
-                        enqueueActions(({ context, enqueue, self }) => {
+                        ({ context, self }) => {
+                            // console.log("3. Sending message")
                             self.send({ type: 'SEND_MESSAGE', data: {
                                 type: 'sync-settings',
                                 message: {
@@ -385,7 +415,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                                     sharing: context.sharing
                                 }
                             } });
-                        }),
+                        },
                     ],
                     exit: stopChild(({ context }) => context.qualityMonitorRef),
                     on: {
@@ -405,14 +435,14 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                                     const message = { type: event.data.type, data: event.data.message };
                                     context.dataChannel.send(JSON.stringify(message));
                                 } else {
-                                    console.warn('Could not send message, data channel is not open.');
+                                    // console.warn('Could not send message, data channel is not open.');
                                 }
                             }
                         },
                         DATA_RECEIVED: {
                             actions: ({ self, context, event }) => {
                                 try {
-                                    console.log("------- AAAAAAAA -----", event)
+                                    // console.log("------- AAAAAAAA -----", event)
                                     const message = JSON.parse(event.data);
                                     switch (message.type) {
                                         case 'ping':
@@ -427,7 +457,7 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                                             self.send({ type: 'PEER_SETTINGS_RECEIVED', settings: message.data });
                                             break;
                                         default:
-                                            console.log('Received unhandled message type:', message.type);
+                                            // console.log('Received unhandled message type:', message.type);
                                         break;
                                     }
                                 } catch (e) {
@@ -463,62 +493,119 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                 }
               },
               noDataChannel: {
-                entry: () => console.log('Connection is not data-enabled.')
+                // entry: () => console.log('!!Connection is not data-enabled.')
               }
             },
             on: {
-              DATA_CHANNEL_OPENED: {
-                actions: assign({
-                  dataChannel: ({ event }) => event.channel
-                }),
-                target: '.withDataChannel'
-              },
-              STATS_UPDATED: {
-                actions: enqueueActions(({ context, enqueue, event }) => {
-                    console.log("--------------- STATS _ UPDATE CALL", event)
-                    
-                })
-              },
-              SEND_PERFORMANCE: {
-                actions: enqueueActions(({ context, enqueue }) => {
-                    console.log("here in send performance", context.rtt)
-                    const sum = context.rtt.reduce((total, current) => total + current, 0);
-                    const mean = sum / context.rtt.length;
-                    const meanCeiling = Math.ceil(mean);
-                    enqueue.sendParent({type: 'child.UPSERT_CONNECTION_VALUE', value: meanCeiling, hash: context.name})
-                    enqueue.assign({rtt: []})
-                  }),
-              },
-              DISCONNECT: 'disconnected'
+                DATA_CHANNEL_OPENED: {
+                    // entry: () => console.log("OPENING DATA CHANNEL!"),
+                    actions: assign({
+                        dataChannel: ({ event }) => event.channel
+                    }),
+                    target: '.withDataChannel'
+                },
+                // STATS_UPDATED: {
+                //     actions: enqueueActions(({ context, enqueue, event }) => {
+                //         // console.log("--------------- STATS _ UPDATE CALL", event)
+                //     })
+                // },
+                SEND_PERFORMANCE: {
+                    actions: enqueueActions(({ context, enqueue }) => {
+                        // console.log("here in send performance", context.rtt)
+                        const sum = context.rtt.reduce((total, current) => total + current, 0);
+                        const mean = sum / context.rtt.length;
+                        const meanCeiling = Math.ceil(mean);
+                        enqueue.sendParent({type: 'child.UPSERT_CONNECTION_VALUE', value: meanCeiling, hash: context.name})
+                        enqueue.assign({rtt: []})
+                    }),
+                },
+                ADD_STREAM: {
+                    target: 'negotiating.gatheringOffer',
+                    actions: assign({
+                      media: ({ event }) => event.media,
+                      peerConnection: ({ context, event }) => {
+                        event.media.getTracks().forEach(track => {
+                          context.peerConnection.addTrack(track, event.media);
+                        });
+                        return context.peerConnection;
+                      }
+                    })
+                  },
+                DISCONNECT: 'disconnected',
             }
         }
     },
     on: {
+        REMOVED_MEDIA: {
+            actions: [
+                ({context}) => {
+                    context.peerConnection.getSenders().forEach(sender => 
+                        {
+                            if (sender){
+                                context.peerConnection.removeTrack(sender);
+                            }
+                        }
+                    )
+                    context.peerMedia = null;
+                },
+                enqueueActions(({enqueue}) => {
+                    enqueue.sendParent({type: 'child.EMIT_USERS'})
+                })
+        ]
+        },
+        DATA_CHANNEL_READY: {
+            // entry: () => console.warn("!! - Received early DATA CHANNEL READY"),
+            target: '#READY'
+        },
         DISCONNECT: {
+            // entry: () => console.warn("!! - Received early DISCONNECT"),
             target: '.disconnected'
         },
-        ICE_CANDIDATE: { actions: 'pushPartialSDP' },
+        ICE_CANDIDATE: { 
+            // entry: ({context}) => console.warn(`2. ICE UPDATE GLOBAL ACTION ${context.name}`),
+            actions: 'pushPartialSDP' 
+        },
+        PEER_STREAM_RECEIVED: { 
+            // entry: ({event}) => console.warn(`Received media!`),
+            actions: [
+                enqueueActions((({ enqueue, event, context }) => {
+                    // enqueue.sendParent({type: "child.PEER_STREAM_RECEIVED", hash: context.name, stream: event.stream})
+                    enqueue.assign({
+                        peerMedia: event.stream
+                    })
+                    enqueue.sendParent({type: "child.SET_AS_DONE", hash: context.name})
+                }))
+            ] 
+        },
+        SET_DONE: { 
+            // entry: ({event}) => console.warn(`SETTING AS DONE!`),
+            actions: [
+                enqueueActions((({ enqueue, event, context }) => {
+                    enqueue.sendParent({type: "child.SET_AS_DONE", hash: context.name})
+                }))
+            ] 
+        },
         MEDIA_UPDATED: {
             actions: [
                 enqueueActions((({ enqueue, event }) => {
-                    console.log("Media update!!!@131@!!!", event)
                     enqueue.assign({
                         camera: event?.camera || false,
                         microphone: event?.microphone || false,
                         sharing: event?.sharing || false,
                     })
                 })),
-                ({ context, event }) => {
+                ({ context, event, self }) => {
                     if (context.dataChannel?.readyState === 'open') {
-                        console.log("Relaying media settings update to peer...");
-                        context.dataChannel.send(JSON.stringify({
-                        type: 'sync-settings',
-                        settings: {
-                            camera: event?.camera || false,
-                            microphone: event?.microphone || false,
-                            sharing: event?.sharing || false,
-                        }
-                        }));
+                        self.send(
+                            { type: 'SEND_MESSAGE', data: {
+                                type: 'sync-settings',
+                                message: {
+                                    camera: event?.camera || false,
+                                    microphone: event?.microphone || false,
+                                    sharing: event?.sharing || false,
+                                }}
+                            }
+                        )
                     }
                 }
             ]
@@ -532,19 +619,19 @@ export const createWebRTCConnectionMachine = (pairName, pairType, mode, timestam
                     }
                 }),
                 ({ context, event }) => {
-                    console.log("Received ice update from server", context, event)
+                    // console.log("Received ice update from server", context, event)
                     if (context.peerConnection && context.peerConnection.remoteDescription) {
-                        console.log("Connection is ready, adding trickle ICE candidate immediately.");
+                        // console.log("Connection is ready, adding trickle ICE candidate immediately.");
                         const newCandidates = Array.isArray(event.ice) ? event.ice : [event.ice];
                         newCandidates.forEach(candidate => {
                             if (candidate) {
-                                console.log(candidate, "CANDIDATE ADDED")
+                                // console.log(candidate, "CANDIDATE ADDED")
                                 context.peerConnection.addIceCandidate(candidate)
                                     .catch(e => console.error("Error adding live trickle ICE candidate:", e));
                             }
                         });
                     } else {
-                        console.log("Connection not ready yet. Storing ICE candidate for later use.");
+                        // console.log("Connection not ready yet. Storing ICE candidate for later use.");
                     }
                 }
             ]

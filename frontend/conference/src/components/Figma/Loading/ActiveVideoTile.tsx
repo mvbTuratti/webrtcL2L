@@ -1,25 +1,24 @@
-import FixedAspectRatio from "../Utils/FixedAspectRatio";
 import { VideoCameraContext } from '../FigmaTest'
 import Video from '../Utils/Video'
 import VideoTile from '../Utils/VideoTile'
+import { memo } from 'react';
 
-const ActiveVideoTile = (): JSX.Element => {
-    const state = VideoCameraContext.useSelector((state) => state);
+const ActiveVideoTile = memo((): JSX.Element => {
+    // const state = VideoCameraContext.useSelector((state) => state);
+    const { camera, mediaStream, microphone } = VideoCameraContext.useSelector((state) => ({
+        camera: state.context.camera,
+        mediaStream: state.context.mediaStream,
+        microphone: state.context.microphone
+    }));
     return ( 
-        <div className="flex flex-col w-[480px] items-start relative bg-[#11131a] rounded-2xl overflow-hidden">
-            <FixedAspectRatio 
-                aspectRatio="one-hundred-and-sixty-nine" 
-                fiftyHeight={false} 
-                portrait={false} 
-                className="!self-stretch !bg-[unset] !flex-[0_0_auto] !bg-[#11131a] !w-full" 
-            />
-            {state.context.camera ? (
+        <div className="flex flex-col w-[480px] min-h-[288px] items-start relative bg-[#11131a] rounded-2xl overflow-hidden">
+            { camera ? (
             <Video
-                mediaStream={state.context.mediaStream}
-            ></Video>) : (<VideoTile mic={state.context.microphone}/>) }
+                mediaStream={mediaStream}
+            ></Video>) : (<VideoTile mic={microphone}/>) }
         </div>
                 
      );
-}
+})
  
 export default ActiveVideoTile;

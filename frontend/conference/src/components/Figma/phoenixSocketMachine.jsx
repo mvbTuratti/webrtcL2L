@@ -4,7 +4,7 @@ import webrtcManagerMachine from './webrtcManagerMachine';
 
 
 async function connectSocket(room, user, sdp, type, hash) {
-  console.log('Attempting to connect to WebSocket...', room, user, sdp, type, hash);
+  // console.log('Attempting to connect to WebSocket...', room, user, sdp, type, hash);
   return new Promise((resolve, reject) => {
     const socket = new Socket('/socket', {params: {user: user, sdp: sdp, type: type, hash: hash}});
     socket.connect();
@@ -13,11 +13,11 @@ async function connectSocket(room, user, sdp, type, hash) {
     channel
       .join()
       .receive('ok', (resp) => {
-        console.log('WebSocket connected:', channel);
+        // console.log('WebSocket connected:', channel);
         resolve(channel);
       })
       .receive('error', (resp) => {
-        console.error('WebSocket connection error:', resp);
+        // console.error('WebSocket connection error:', resp);
         reject(resp);
       });
   });
@@ -62,7 +62,7 @@ const websocketMachine = setup(
           },
           {
             target: 'waiting',
-            actions: () => console.log('Missing parameters, staying in waiting state')
+            // actions: () => console.log('Missing parameters, staying in waiting state')
           }
         ]
       }
@@ -88,7 +88,7 @@ const websocketMachine = setup(
       },
     },
     connecting: {
-      entry: (e) => console.log('Entered state: connecting', e),
+      // entry: (e) => console.log('Entered state: connecting', e),
       invoke: {
         src: 'setupSocketConnection',
         input: ({ context, event }) => ({
@@ -106,20 +106,20 @@ const websocketMachine = setup(
         },
         onError: {
           target: 'disconnected',
-          actions: ( { event } ) => console.error('WebSocket connection error:', event),
+          // actions: ( { event } ) => console.error('WebSocket connection error:', event),
         },
       },
     }, 
     connected: {
       entry: ({ context, self, send }) => {
-        console.log('Entered state: connected', context)
+        // console.log('Entered state: connected', context)
         // context.channel.on("join_hash", (payload) => {
         //   // console.log("------- JOIN HASH EVENT -----", payload)
         //   // self.send({ type: 'PAIRS', data: payload })
         //   self.send({ type: 'JOIN_HASH', data: payload });
         // })
         context.channel.on("sdp_pairs", (payload) => {
-          console.log("------- SDP PAIRS EVENT -----", payload)
+          // console.log("------- SDP PAIRS EVENT -----", payload)
           self.send({ type: 'CURRENT_USERS_SDP', data: payload })
         })
         context.channel.on("pairs", (payload) => {
@@ -131,17 +131,17 @@ const websocketMachine = setup(
           self.send({ type: 'ICE_UPDATE', data: payload })
         })
         context.channel.on("negotiation_response", (payload) => {
-          console.log("------- MAKE_PAIR EVENT -----", payload)
+          // console.log("------- MAKE_PAIR EVENT -----", payload)
           self.send({ type: 'MAKE_PAIR', data: payload })
         })
         context.channel.on("user_left", (payload) => {
-          console.log("--------- USER LEFT  -------", payload)
+          // console.log("--------- USER LEFT  -------", payload)
           self.send({ type: 'USER_LEFT', data: payload })
           // send('webrtcManager',{ type: 'USER_LEFT', data: payload });
         })
         context.channel.on("new_webrtc_required", (payload) => {
-          console.log("!!!!!----- NEW RTC REQUESTED")
-          self.send({ type: 'NEW_WEBRTC_REQUIRED' })
+          // console.log("!!!!!----- NEW RTC REQUESTED")
+          self.send({ type: 'NEW_WEBRTC_REQUIRED', payload: payload })
         })
       },
       on: {
@@ -171,7 +171,7 @@ const websocketMachine = setup(
         USER_LEFT: {
           actions: enqueueActions((
             ({ enqueue, event, context }) => {
-              console.log("------- USER_LEFT --------", event)
+              // console.log("------- USER_LEFT --------", event)
               enqueue.sendTo(context.webrtcManager, {type: "USER_LEFT", ...event})
               enqueue.assign({
                 pairs: ({ event, context }) => context.pairs.filter( (item) => item !== event.data.user),
@@ -180,8 +180,8 @@ const websocketMachine = setup(
         },
         NEW_WEBRTC_REQUIRED: {
           actions: enqueueActions((({ enqueue, event, context }) => {
-            console.log("------- NEW WEBRTC REQUIRED --------", event)
-            enqueue.sendTo(context.webrtcManager,{ type: 'NEW_WEBRTC_REQUIRED' })
+            // console.log("------- NEW WEBRTC REQUIRED --------", event)
+            enqueue.sendTo(context.webrtcManager,{ type: 'NEW_WEBRTC_REQUIRED', ...event})
           }))
         },
         ICE_UPDATE: {
@@ -190,75 +190,57 @@ const websocketMachine = setup(
             enqueue.sendTo(context.webrtcManager,{ type: 'ICE_UPDATE_SERVER', data: event.data })
           }))
         },
-        // "child.PUSH_PARTIAL_ICE_CANDIDATE": {
-        //   actions: ({ context, event }) => {
-        //     // console.log("PUSH PARTIAL ICE CANDIDATE: Received from child, sending to Phoenix...", event.message);
-        //     const { hash, ice } = event.message;
-        //     if (context.channel && hash && ice) {
-        //       context.channel.push("ice_update", { hash, ice }).receive("ok", (response) => {
-        //           console.log("Server ACK'd batched ice_update:", response);
-        //         })
-        //         .receive("error", (reason) => {
-        //           console.error("Server rejected batched ice_update:", reason);
-        //         });;
-        //     } else {
-        //       console.error("Cannot send ICE update: channel not available or payload is invalid.", {
-        //         hasChannel: !!context.channel,
-        //         hash,
-        //         ice
-        //       });
-        //     }
-        //   }
-        // },
         "child.NEGOTIATION_RESPONSE": {
           actions: ({ context, event }) => {
-            console.log("NEGOTIATION_RESPONSE: Received from child, sending to Phoenix...", event.message);
+            // console.log("NEGOTIATION_RESPONSE: Received from child, sending to Phoenix...", event.message);
             const { hash, ice, sdp } = event.message;
             if (context.channel && hash && ice && sdp) {
               context.channel.push("negotiation_response", { hash, ice, sdp }).receive("ok", (response) => {
                   // console.log("Server ACK'd batched NEGOTIATION_RESPONSE:", response);
                 })
                 .receive("error", (reason) => {
-                  console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
+                  // console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
                 });;
             } else {
-              console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
-                hasChannel: !!context.channel,
-                hash,
-                ice
-              });
+              // console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
+              //   hasChannel: !!context.channel,
+              //   hash,
+              //   ice
+              // });
             }
           }
         },
         "child.SDP_VALUE": {
           actions: ({ context, event, self }) => {
-            console.log("!212123!!!!!!    HERE IN SDP VALUE PARENT !!!!!!", event)
+            // console.log("!212123!!!!!!    HERE IN SDP VALUE PARENT !!!!!!", event)
             const { sdp, format, hash } = event.message;
             if (context.channel && sdp && hash) {
               const type = format || "data"
-              context.channel.push("new_webrtc", { sdp, hash, type }).receive("ok", (response) => {
-                  console.log("!!!! Server ACK'd SDP Value of NEW WEBRTC:", response);
+              let { target } = event.message;
+              target = (target.startsWith("placeholder")) ? context.user : target // If starts with placeholder use the user.
+              context.channel.push("new_webrtc", { sdp, hash, type, target }).receive("ok", (response) => {
+                  // console.log("!!!! Server ACK'd SDP Value of NEW WEBRTC:", response);
                 })
                 .receive("error", (reason) => {
-                  console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
+                  // console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
                 });;
             } else {
-              console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
-                hasChannel: !!context.channel
-              });
+              // console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
+              //   hasChannel: !!context.channel
+              // });
             }
           }
         },
         "child.UPSERT_CONNECTION_VALUE": {
           actions: ({ context, event, self }) => {
-            console.log("!!! ---  child.UPSERT_CONNECTION_VALUE", event)
+            // console.log("!!! ---  child.UPSERT_CONNECTION_VALUE", event)
             const { value, hash } = event;
             if (context.channel && value && hash) {
               context.channel.push("connection_quality", { hash, value })
             } else {
-              console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
-                hasChannel: !!context.channel
-              });
+              // console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
+              //   hasChannel: !!context.channel
+              // });
             }
           }
         },
@@ -268,8 +250,46 @@ const websocketMachine = setup(
   on: {
     MEDIA_UPDATED: {
       actions: enqueueActions((({ enqueue, event, context }) => {
+        // console.log("Sending media", event)
         enqueue.sendTo(context.webrtcManager, event)
       }))
+    },
+    "child.SDP_VALUE": {
+      actions: ({ context, event, self }) => {
+        // console.warn("!212123!!!!!!    HERE IN SDP VALUE PARENT !!!!!!", event)
+        const { sdp, format, hash } = event.message;
+        if (context.channel && sdp && hash) {
+          const type = format || "data"
+          context.channel.push("new_webrtc", { sdp, hash, type }).receive("ok", (response) => {
+              // console.log("!!!! Server ACK'd SDP Value of NEW WEBRTC:", response);
+            })
+            .receive("error", (reason) => {
+              // console.error("Server rejected batched NEGOTIATION_RESPONSE:", reason);
+            });;
+        } else {
+          // console.error("Cannot send NEGOTIATION_RESPONSE: channel not available or payload is invalid.", {
+          //   hasChannel: !!context.channel
+          // });
+        }
+        const retryCount = event.message.retryCount || 0;
+        if (retryCount < 10) {
+          const nextAttempt = retryCount + 1;
+          // console.warn(`Channel not ready for SDP VALUE. Scheduling retry ${nextAttempt}/2 in 2 seconds...`);
+          const nextEvent = {
+            ...event,
+            message: {
+              ...event.message,
+              retryCount: nextAttempt,
+            },
+          };
+          setTimeout(() => {
+            self.send(nextEvent);
+          }, 2000);
+        } else {
+          // const { hash } = event.message;
+          // console.error(`Failed to send ICE update for hash ${hash}. Channel not available after 3 attempts.`);
+        }
+      }
     },
     "child.EMIT_USERS": {
       actions: [
@@ -284,7 +304,7 @@ const websocketMachine = setup(
       ]
     },
     "child.EMIT_DONE": {
-      entry: () => console.log("-------------------111221 EMIT DONE -=-------"),
+      // entry: () => console.log("-------------------111221 EMIT DONE -=-------"),
       actions: [
         assign(({event, context }) => {
           return {...context, done: event.done}
@@ -294,56 +314,86 @@ const websocketMachine = setup(
     },
     "child.PUSH_PARTIAL_ICE_CANDIDATE": {
       actions: ({ context, event, self }) => {
+        const schedulePushRetry = (failureReason) => {
+          const retryCount = event.message.retryCount || 0;
+    
+          if (retryCount < 4) {
+            const nextAttempt = retryCount + 1;
+            // console.warn(
+            //   `Push PARTIAL ICE CANDIDATE failed due to: ${failureReason}. Scheduling retry ${nextAttempt}/4 in 2 seconds...`
+            // );
+            const nextEvent = {
+              ...event,
+              message: { ...event.message, retryCount: nextAttempt },
+            };
+            
+            setTimeout(() => {
+              self.send(nextEvent);
+            }, 2000);
+          } else {
+            // const { hash } = event.message;
+            // console.error(`Push failed for hash ${hash} after ${retryCount + 1} attempts. Final reason: ${failureReason}.`);
+          }
+        };
+        // console.log("<PHOENIX MACHINE> - PARTIAL EVENT")
         if (context.channel && context.channel.canPush()) {
-          console.log('Channel is ready. Pushing ICE update...');
+          // console.warn('Channel ready. Pushing ICE update...');
           const { hash, ice } = event.message;
           context.channel.push("ice_update", { hash, ice })
             .receive("ok", (resp) => {
-              // console.log("Server ACK'd ice_update:", resp)
+              // console.log("Server ACK'd ice_update:", resp);
             })
-            .receive("error", (reason) => console.error("Server rejected ice_update:", reason));
-          return;
-        }
-        const retryCount = event.message.retryCount || 0;
-    
-        if (retryCount < 2) {
-          const nextAttempt = retryCount + 1;
-          console.warn(`Channel not ready. Scheduling retry ${nextAttempt}/2 in 2 seconds...`);
-    
-          const nextEvent = {
-            ...event,
-            message: {
-              ...event.message,
-              retryCount: nextAttempt,
-            },
-          };
-          setTimeout(() => {
-            self.send(nextEvent);
-          }, 1000);
-        } else {
-          const { hash } = event.message;
-          console.error(`Failed to send ICE update for hash ${hash}. Channel not available after 3 attempts.`);
+            .receive("error", (reason) => {
+              schedulePushRetry("server rejection");
+            })
+            .receive("timeout", () => {
+              schedulePushRetry("timeout");
+            });
+        } 
+        else {
+          schedulePushRetry("channel not ready");
         }
       }
     },
+    "child.REQUEST_RECOMMENDATION": {
+      actions: enqueueActions((({ enqueue, event, context }) => {
+        // console.log("---- CALLED REQUEST_RECOMMENDATION CONNECTION ----", event)
+        if (context.channel && context.channel.canPush()) {
+          // console.log('Channel is ready. Adding stream...');
+          const { media, streamer } = event;
+          context.channel.push("request_recommendation", { media, streamer })
+            // .receive("ok", (resp) => {
+            //   // console.log("Server ACK'd CALLED CREATE CONNECTION:", resp)
+            //   // enqueue.sendTo(context.webrtcManager, {type: "CURRENT_USERS_SDP", ...resp})
+            // })
+            // .receive("missing_streamer", () => {
+            //   // console.warn("Missing streamer.")
+            // })
+            // .receive("error", (reason) => console.error("CREATE CONNECTION:", reason));
+          return;
+        } else {
+          // console.log("COULD NOT SEND MESSAGE TO CREATE CONNECTION")
+        }
+      }))
+    },
     "child.ADD_MEDIA": {
       actions: ({ context, event, self }) => {
-        console.log("---- CALLED ADD MEDIA ----")
+        // console.log("---- CALLED ADD MEDIA ----")
         if (context.channel && context.channel.canPush()) {
-          console.log('Channel is ready. Adding stream...');
+          // console.log('Channel is ready. Adding stream...');
           const { type } = event.message;
           context.channel.push("add_stream", { type })
-            .receive("ok", (resp) => {
-              console.log("Server ACK'd add_stream:", resp)
-            })
-            .receive("error", (reason) => console.error("Server rejected ice_update:", reason));
+            // .receive("ok", (resp) => {
+            //   console.log("Server ACK'd add_stream:", resp)
+            // })
+            // .receive("error", (reason) => console.error("Server rejected ice_update:", reason));
           return;
         }
         const retryCount = event.message.retryCount || 0;
     
-        if (retryCount < 2) {
+        if (retryCount < 4) {
           const nextAttempt = retryCount + 1;
-          console.warn(`Channel not ready. Scheduling retry ${nextAttempt}/2 in 2 seconds...`);
+          // console.warn(`Channel not ready. Scheduling retry ${nextAttempt}/2 in 1 seconds...`);
     
           const nextEvent = {
             ...event,
@@ -356,7 +406,7 @@ const websocketMachine = setup(
             self.send(nextEvent);
           }, 1000);
         } else {
-          console.error(`Failed to add stream type. Channel not available after 3 attempts.`);
+          // console.error(`Failed to add stream type. Channel not available after 3 attempts.`);
         }
       }
     },

@@ -37,9 +37,15 @@ const Permission = ({ room } : Permission): JSX.Element => {
   const [conferenceState, setconferenceState] = useState(false)
   const [user, setUser] = useState("")
 
-  const state = VideoCameraContext.useSelector((state) => state);
   const videoActorRef = VideoCameraContext.useActorRef();
   const socketActorRef = SocketContext.useActorRef();
+  // const state = VideoCameraContext.useSelector((state) => state);
+  const { permissionRemovedMic, permissionRemovedCamera } = VideoCameraContext.useSelector(
+    (state) => ({
+      permissionRemovedMic: state.context.permissionRemovedMic,
+      permissionRemovedCamera: state.context.permissionRemovedCamera,
+    })
+  );
   
   useEffect(() => {
       const elements: string[] = ["camera", "microphone"];
@@ -98,7 +104,7 @@ const Permission = ({ room } : Permission): JSX.Element => {
           <ActiveVideoTile></ActiveVideoTile>
           <div className="flex w-[480px] flex-col items-center gap-4 justify-between relative flex-[0_0_auto]">
 
-            {(!state.context.permissionRemovedMic || !state.context.permissionRemovedCamera) ? (
+            {(!permissionRemovedMic || !permissionRemovedCamera) ? (
 
               <VideoControls></VideoControls>
             ) : (

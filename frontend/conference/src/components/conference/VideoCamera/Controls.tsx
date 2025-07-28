@@ -26,7 +26,7 @@ const Controls = ({ mediaStream } : ControlsProps) => {
         ? 'absolute -translate-y-[40px] translate-x-[120px]'
         : 'hidden'}`;
     const devices: DeviceType[] = ['audio', 'video']
-    console.log("Controls")
+    // console.log("Controls")
 
     return (
     <div className='h-full w-full' id="control-props" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>

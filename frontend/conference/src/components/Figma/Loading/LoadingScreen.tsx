@@ -25,12 +25,16 @@ const LoadingScreen = ({room, userName}:Permission) => {
       const check = socketActorRef.on('CHECK_STATUS', (emittedEvent :any) => {
         setDone(emittedEvent?.done || false)
       })
+      // const mediaUpdate = videoActorRef.on('MEDIA_UPDATED', (emittedEvent :any) => {
+      //   socketActorRef.send({...emittedEvent})
+      // })
       const subscription = socketActorRef.on("USERS_AVAILABLE", (emittedEvent : any) => {
-        // console.warn("Received USERS_AVAILABLE:", emittedEvent);
+        console.warn("Received USERS_AVAILABLE:");
+        // console.log(emittedEvent)
         const usersEmitted = emittedEvent.users;
         const rawUsers = Object.values(usersEmitted);
         const usersMap = rawUsers.reduce((acc:any, currentUser:any) => {
-          if (!currentUser.user || currentUser.user === userName) {
+          if (!currentUser.user || currentUser.user === userName || currentUser.status !== 'done') {
             return acc;
           }
           const { user, type, actor } = currentUser;
@@ -51,6 +55,7 @@ const LoadingScreen = ({room, userName}:Permission) => {
       return () => { 
         subscription.unsubscribe()
         check.unsubscribe()
+        // mediaUpdate.unsubscribe()
       };
     }, [socketActorRef, setDone, setParticipants]); 
     

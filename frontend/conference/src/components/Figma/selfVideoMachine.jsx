@@ -78,9 +78,15 @@ export const fetchVideoMachine = setup(
       emitMediaUpdate: emit(({ context }) => ({
         type: 'MEDIA_UPDATED',
         stream: context.mediaStream,
+        audioStream: context.audioOnlyStream,
         camera: context.camera,
         microphone: context.microphone,
       })),
+      stopCurrentStream: ({ context }) => {
+        if (context.mediaStream) {
+          context.mediaStream.getTracks().forEach(track => track.stop());
+        }
+      }
     },
     actors: {
       askForDeviceOptions: fromPromise(( { input } ) => listDeviceOptions(input.mediaType)),
@@ -95,6 +101,7 @@ export const fetchVideoMachine = setup(
     camera: false,
     microphone: false,
     mediaStream: undefined,
+    audioOnlyStream: undefined,
     micId: "default",
     cameraId: "default",
     permissionRemovedMic: false,
@@ -109,10 +116,26 @@ export const fetchVideoMachine = setup(
         input: (({ context }) => context),
         onDone: {
           actions: [
-            assign({
-              camera: ({context}) => context.joining ? true : context.camera,
-              microphone: ({context}) => context.joining ? true : context.microphone,
-              mediaStream: ( { event } ) => event.output,
+            // assign({
+            //   camera: ({context}) => context.joining ? true : context.camera,
+            //   microphone: ({context}) => context.joining ? true : context.microphone,
+            //   mediaStream: ( { event } ) => event.output,
+            // }),
+            assign(({context, event}) => {
+              const fullStream = event.output;
+              let audioOnlyStream = undefined;
+              const audioTracks = fullStream.getAudioTracks();
+              if (audioTracks.length > 0) {
+                const audioStream = new MediaStream();
+                audioStream.addTrack(audioTracks[0]);
+                audioOnlyStream = audioStream;
+              }
+              return {
+                camera: context.joining ? true : context.camera,
+                microphone: context.joining ? true : context.microphone,
+                mediaStream: fullStream,
+                audioOnlyStream: audioOnlyStream,
+              };
             }),
             { type: 'emitMediaUpdate' }
         ],
@@ -143,6 +166,7 @@ export const fetchVideoMachine = setup(
         },
         "painel.removedMic": {
           actions: [ 
+            'stopCurrentStream',
             assign({
               microphone: ({ event }) => false,
               permissionRemovedMic: ({ event }) => 'permission' in event
@@ -153,6 +177,7 @@ export const fetchVideoMachine = setup(
         },
         "painel.removedCamera": {
           actions: [ 
+            'stopCurrentStream',
             assign({
               camera: ({ event }) => false,
               permissionRemovedCamera: ({ event }) => 'permission' in event

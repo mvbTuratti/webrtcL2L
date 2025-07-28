@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@nextui-org/react';
 import { MdNavigateBefore, MdNavigateNext } from 'react-icons/md';
-import { SocketContext } from '../Figma/FigmaTest'; 
+// import { SocketContext } from '../Figma/FigmaTest'; 
 import ParticipantTile from './ParticipantTile';
 import LocalParticipantTile from './LocalParticipantTile';
 import { VideoCameraContext } from '../Figma/FigmaTest';
@@ -49,7 +49,14 @@ const ConferenceRoom = ({userName, roomId, participants}: ConferenceRoom) => {
 
   const [gridPage, setGridPage] = useState(0);
   const [barPage, setBarPage] = useState(0);
-
+  const findDisplayActor = (participant: Participant) => {
+    const videoActor = participant.actors.find(a => a.type === 'high' || a.type === 'low');
+    if (videoActor) return videoActor.actor;
+  
+    const audioActor = participant.actors.find(a => a.type === 'audio');
+    if (audioActor) return audioActor.actor;
+    return null;
+  };
   const gridTotalPages = Math.ceil(participants.length / REMOTE_PER_PAGE_GRID);
   const gridParticipantsToRender = participants.slice(
     gridPage * REMOTE_PER_PAGE_GRID,
@@ -77,12 +84,19 @@ const ConferenceRoom = ({userName, roomId, participants}: ConferenceRoom) => {
             <MdNavigateBefore/>
           </Button>
 
-          {barParticipantsToRender.map(p => (
+          {/* {barParticipantsToRender.map(p => (
             <div key={p.id} className="flex-shrink-0 w-40 h-auto">
               <ParticipantTile name={p.name} />
             </div>
-          ))}
-
+          ))} */}
+          {barParticipantsToRender.map((participant) => {
+            const displayActor = findDisplayActor(participant);
+            return (
+              <div className={layout.tileClass} key={participant.id}>
+                <ParticipantTile name={participant.name} actor={displayActor} />
+              </div>
+            );
+          })}
           <Button isIconOnly size="sm" variant="flat" onClick={() => setBarPage(p => Math.min(p + 1, barTotalPages - 1))} isDisabled={barPage >= barTotalPages - 1}>
             <MdNavigateNext/>
           </Button>
@@ -110,11 +124,19 @@ const ConferenceRoom = ({userName, roomId, participants}: ConferenceRoom) => {
           <div className={layout.tileClass}>
             <LocalParticipantTile name={userName} mediaStream={camera ? mediaStream : undefined} isSharingScreen={false} />
           </div>
-          {gridParticipantsToRender.length > 0 && gridParticipantsToRender.map((participant) => (
+          {/* {gridParticipantsToRender.length > 0 && gridParticipantsToRender.map((participant) => (
             <div className={layout.tileClass} key={participant.id}>
               <ParticipantTile name={participant.name} />
             </div>
-          ))}
+          ))} */}
+          {gridParticipantsToRender.length > 0 && gridParticipantsToRender.map((participant) => {
+            const displayActor = findDisplayActor(participant);
+            return (
+              <div className={layout.tileClass} key={participant.id}>
+                <ParticipantTile name={participant.name} actor={displayActor} />
+              </div>
+            );
+          })}
         </div>
       </div>
       

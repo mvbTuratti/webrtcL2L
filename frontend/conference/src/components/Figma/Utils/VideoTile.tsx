@@ -6,8 +6,8 @@ interface Props {
 }
 const VideoTile = ({mic} : Props) : JSX.Element => {
     return ( 
-        <div className="relative w-[480px] h-[338px] bg-[#11131a] rounded-2xl overflow-hidden">
-            <div className="!absolute !left-[196px] !top-[125px]">
+        <div className="relative w-[480px] h-[288px] bg-[#11131a] rounded-2xl overflow-hidden">
+            <div className="!absolute !left-[196px] !top-[100px]">
                 <Avatar initials="MB" size="large" nameFilled></Avatar>
             </div>
             <div className="flex w-8 h-8 items-center justify-center p-2 absolute top-2 left-[440px] bg-default-600 rounded-2xl">
