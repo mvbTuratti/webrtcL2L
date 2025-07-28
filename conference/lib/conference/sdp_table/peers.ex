@@ -7,7 +7,7 @@ defmodule Conference.SdpTable.Peers do
   # - pending: negotiations not yet matched.
   # - active: negotiations that have been matched.
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, %{pending: %{}, active: %{}, }, opts)
+    GenServer.start_link(__MODULE__, %{pending: %{}, active: %{}, requesting: %{}}, opts)
   end
 
   @doc """
@@ -39,6 +39,10 @@ defmodule Conference.SdpTable.Peers do
   """
   def update_ice(pid \\ __MODULE__, hash, new_ice, user_pid) do
     GenServer.call(pid, {:update_ice, hash, new_ice, user_pid})
+  end
+
+  def request_stream(pid, viewer_name, streamer_name, source_streamer, stream_type, viewer_pid) do
+    GenServer.call(pid, {:request_stream, viewer_name, streamer_name, source_streamer, stream_type, viewer_pid})
   end
 
   @doc """
@@ -129,7 +133,7 @@ defmodule Conference.SdpTable.Peers do
     {matches, new_state} =
       case connection_type do
         "data" -> try_auto_match(hash, state, channel_pid, refill, opts)
-        _ -> {nil, state}
+        _ -> try_fulfill_request(hash, state, channel_pid, name, target)
       end
 
     {:reply, matches || %{}, new_state, @timeout}
@@ -174,6 +178,73 @@ defmodule Conference.SdpTable.Peers do
         end
       end)
     {:reply, all_removed_hashes, final_state, @timeout}
+  end
+  @impl true
+  def handle_call({:request_stream, viewer_name, target_streamer, source_streamer, stream_type, viewer_pid}, _from, state) do
+    # Find a pending offer that matches the request.
+    # A stream from `source_streamer` intended for `target_streamer` of a certain type.
+    found_offer = Enum.find(state.pending, fn {_hash, entry} ->
+      entry.name == source_streamer and
+      entry.target == target_streamer and
+      entry.connection_type == stream_type
+    end)
+
+    case found_offer do
+      {hash, offer_entry} ->
+        # IO.warn("Match found for #{viewer_name}'s request. Moving offer #{hash} to active.")
+        updated_offer = Map.put(offer_entry, :partner_pid, viewer_pid)
+        new_state = %{state |
+          pending: Map.delete(state.pending, hash),
+          active: Map.put(state.active, hash, updated_offer)
+        }
+        {:reply, %{hash => updated_offer}, new_state, @timeout}
+      nil ->
+        # IO.warn("No pending offer found for #{viewer_name}. Registering request.")
+        request_key = {source_streamer, target_streamer, stream_type}
+        new_request = %{viewer_pid: viewer_pid, viewer_name: viewer_name}
+        new_state = %{state | requesting: Map.put(state.requesting, request_key, new_request)}
+        {:reply, %{}, new_state, @timeout}
+    end
+  end
+
+  defp try_fulfill_request(offer_hash, state, streamer_pid, streamer_name, relayer) do
+    stream_type = state.pending[offer_hash].connection_type
+    request_key = {streamer_name, relayer, stream_type}
+
+    case Map.get(state.requesting, request_key) do
+      nil ->
+        IO.warn("NO ONE IS REQUESTING THIS STREAM YET...")
+        {nil, state}
+
+      requesting_viewer ->
+        # IO.warn("1. Match found")
+        # IO.inspect(state.pending |> Enum.map(fn {x, y} -> {x, y.connection_type, y.name, y.target} end))
+        offer_entry = state.pending[offer_hash]
+        # IO.inspect(offer_hash, label: "HASH MATCHED")
+        # IO.warn("2. Update the offer with the viewers PID")
+        matched_offer = Map.put(offer_entry, :partner_pid, requesting_viewer.viewer_pid)
+        # IO.inspect(requesting_viewer, label: "REQUESTING VIEWER")
+        # IO.warn("3. Move offer from pending to active")
+        new_pending = Map.delete(state.pending, offer_hash)
+        # IO.inspect(offer_hash, label: "REMOVED FROM PENDING")
+        new_active = Map.put(state.active, offer_hash, matched_offer)
+        # IO.warn("4. Remove offer from requested")
+        # IO.inspect({new_active.connection_type, new_active.name, new_active.target}, label: "put into active")
+        new_requesting = Map.delete(state.requesting, request_key)
+        # IO.inspect(request_key, label: "Removed that key from requesting as well...")
+        new_state = %{state | pending: new_pending, active: new_active, requesting: new_requesting}
+        send(requesting_viewer.viewer_pid, {:private_message, %{
+          protocol: :offer_ready,
+          hash: offer_hash,
+          user: streamer_name,
+          sdp: matched_offer.sdp,
+          ice: matched_offer.ice,
+          matched_offer: matched_offer
+        }})
+        send(matched_offer.creator_pid, {:private_message, %{protocol: :new_webrtc_required, from: requesting_viewer.viewer_name, type: stream_type}})
+        # IO.inspect(offer_hash, label: "5. Matched offer")
+        {%{}, new_state}
+    end
   end
   defp does_user_have_media?(pid_to_check, type_to_check, state) do
     Enum.find(state.pending, fn {_hash, entry} ->
