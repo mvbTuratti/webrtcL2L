@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Tooltip } from '@nextui-org/react';
 import { MdVideocam, MdVideocamOff, MdMic, MdMicOff, MdScreenShare, MdStopScreenShare, MdLogout } from 'react-icons/md';
-import { VideoCameraContext } from '../Figma/FigmaTest';
+import { VideoCameraContext, SocketContext } from '../Figma/FigmaTest';
 
 interface RoomControlsProps {
   roomId: string;
@@ -11,6 +11,7 @@ interface RoomControlsProps {
 const RoomControls: React.FC<RoomControlsProps> = ({ roomId }) => {
   const navigate = useNavigate();
   const videoActorRef = VideoCameraContext.useActorRef();
+  const socketActorRef = SocketContext.useActorRef();
   const { camera, microphone, isSharingScreen } = VideoCameraContext.useSelector((state) => state.context);
 
   const handleToggleCamera = () => {
@@ -35,7 +36,8 @@ const RoomControls: React.FC<RoomControlsProps> = ({ roomId }) => {
     if (camera) {
         videoActorRef.send({ type: 'painel.removedCamera' });
     }
-    navigate(`/lobby/${roomId}`);
+    socketActorRef.send({type: "MANUAL_DISCONNECT"})
+    navigate(`/`);
   };
 
   return (
@@ -54,11 +56,11 @@ const RoomControls: React.FC<RoomControlsProps> = ({ roomId }) => {
           </Button>
         </Tooltip>
 
-        <Tooltip content={isSharingScreen ? 'Parar de compartilhar' : 'Compartilhar tela'}>
+        {/* <Tooltip content={isSharingScreen ? 'Parar de compartilhar' : 'Compartilhar tela'}>
           <Button isIconOnly size="lg" variant="flat" color={isSharingScreen ? 'danger' : 'primary'} onClick={handleToggleScreenShare}>
             {isSharingScreen ? <MdStopScreenShare size={24} /> : <MdScreenShare size={24} />}
           </Button>
-        </Tooltip>
+        </Tooltip> */}
 
         <Tooltip content="Sair da chamada">
           <Button isIconOnly size="lg" variant="flat" color="danger" onClick={handleLeaveRoom}>

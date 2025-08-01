@@ -54,6 +54,7 @@ const websocketMachine = setup(
   }),
   states: {
     waiting: {
+      id: "waiting",
       on: {
         SET_ROOM_AND_USER: [
           {
@@ -409,6 +410,27 @@ const websocketMachine = setup(
           // console.error(`Failed to add stream type. Channel not available after 3 attempts.`);
         }
       }
+    },
+    MANUAL_DISCONNECT: {
+      target: '#waiting',
+      actions: [
+        ({ context }) => {
+          if (context.channel) {
+            console.log("Manually leaving Phoenix channel...");
+            context.channel.leave()
+              .receive("ok", () => console.log("Successfully left channel."))
+              .receive("error", () => console.error("Failed to leave channel."));
+          }
+        },
+        assign({
+          channel: undefined,
+          users: {},
+          pairs: [],
+          room: "",
+          user: "",
+          webrtcManager: ({spawn}) => spawn(webrtcManagerMachine, { id: 'webrtcManager' })
+        })
+      ]
     },
   }
 });

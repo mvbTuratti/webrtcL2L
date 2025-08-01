@@ -99,7 +99,7 @@ const Permission = ({ room } : Permission): JSX.Element => {
             Configure seu áudio e vídeo antes de iniciar a chamada
           </p>
         </div>
-        <MemberCounting number={3}></MemberCounting> {/* Pode colocar um número de exemplo */}
+        {/* <MemberCounting number={3}></MemberCounting> Pode colocar um número de exemplo */}
         <div className="flex flex-col items-start gap-6 relative self-stretch w-full flex-[0_0_auto]">
           <ActiveVideoTile></ActiveVideoTile>
           <div className="flex w-[480px] flex-col items-center gap-4 justify-between relative flex-[0_0_auto]">
